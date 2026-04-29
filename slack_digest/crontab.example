@@ -1,0 +1,11 @@
+# Slack Daily Digest - Run at 4pm Mon-Thurs
+# Add this to your crontab with: crontab -e
+# Adjust the path and timezone as needed
+
+# Set environment
+SHELL=/bin/bash
+PATH=/usr/local/bin:/usr/bin:/bin
+
+# Run digest at 4pm (16:00) Monday through Thursday
+# Minute Hour Day Month DayOfWeek Command
+0 16 * * 1-4 cd /path/to/curate-house-app/slack_digest && /usr/bin/python3 digest.py >> /var/log/slack_digest.log 2>&1

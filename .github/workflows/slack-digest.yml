@@ -1,0 +1,33 @@
+name: Slack Daily Digest
+
+on:
+  schedule:
+    # Run at 4pm UTC Mon-Thurs (adjust for your timezone)
+    # For EST (UTC-5), use "0 21 * * 1-4" to run at 4pm EST
+    # For PST (UTC-8), use "0 0 * * 2-5" to run at 4pm PST (next day UTC)
+    - cron: '0 21 * * 1-4'
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  generate-digest:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r slack_digest/requirements.txt
+
+      - name: Generate and send digest
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_USER_ID: ${{ secrets.SLACK_USER_ID }}
+          SEND_DM: 'true'
+        run: |
+          python slack_digest/digest.py
