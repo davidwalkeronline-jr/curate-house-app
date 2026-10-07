@@ -39,6 +39,17 @@ html{scroll-behavior:smooth}
 .bs-nav{width:100%;justify-content:space-between;gap:10px !important;font-size:14px !important;letter-spacing:0 !important}
 .bs-nav .bs-btn{padding:10px 16px !important}
 }
+@media (max-width: 640px){
+.bs-nav a{min-height:44px;display:inline-flex;align-items:center}
+.bs-sec{padding-top:64px !important;padding-bottom:64px !important}
+.bs-vision-img{height:380px !important}
+.bs-soon{letter-spacing:0.16em !important;padding-left:0.16em !important}
+.bs-cta{padding:32px 22px !important}
+.bs-cta-row{width:100%}
+.bs-cta-row a{flex:1 1 100%;justify-content:center}
+.bs-foot-link{min-height:44px;display:inline-flex;align-items:center}
+.bs-faq summary{font-size:17px !important}
+}
 @media (max-width: 360px){
 .bs-nav{gap:8px !important;font-size:13px !important}
 .bs-nav .bs-btn{padding:10px 12px !important}
@@ -111,13 +122,13 @@ section h2,blockquote,.bs-reveal,.bs-card{animation:bs-reveal linear both;animat
 <div id="campaign-video" style="position: relative; width: 100%; aspect-ratio: 16 / 9; border-radius: 14px; overflow: hidden; background: #1C1B19; box-shadow: 0 24px 60px rgba(28,27,25,0.35)">
 <img src="assets/video-poster.jpg" alt="" style="position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.55">
 <div style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 20px; color: #FFFFFF">
-<p style="margin: 0; font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 600; font-size: clamp(36px, 7vw, 72px); letter-spacing: 0.24em; line-height: 1.1; text-transform: uppercase; padding-left: 0.24em; text-shadow: 0 2px 18px rgba(0,0,0,0.45)">Coming Soon</p>
+<p class="bs-soon" style="margin: 0; font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 600; font-size: clamp(36px, 7vw, 72px); letter-spacing: 0.24em; line-height: 1.1; text-transform: uppercase; padding-left: 0.24em; text-shadow: 0 2px 18px rgba(0,0,0,0.45)">Coming Soon</p>
 <p style="margin: 0; font-family: Figtree, system-ui, sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase">The Bold Springs campaign video</p>
 </div>
 </div>
 </div>
 </div>
-<div style="position: relative; background: #856A2A; padding: 36px max(20px, calc((100% - 1040px) / 2)) 44px; display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 28px 20px; color: #FFFFFF; text-align: center">
+<div style="position: relative; background: #856A2A; padding: 36px max(20px, calc((100% - 1040px) / 2)) 44px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr)); gap: 28px 20px; color: #FFFFFF; text-align: center">
 <div>
 <div style="font-family: 'Cormorant Garamond', Georgia, serif; font-size: clamp(34px, 8vw, 46px); font-weight: 700; line-height: 1">$6M</div>
 <div style="margin-top: 6px; font-family: Figtree, system-ui, sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase">Campaign goal</div>
@@ -140,7 +151,7 @@ section h2,blockquote,.bs-reveal,.bs-card{animation:bs-reveal linear both;animat
 </div>
 
 <!-- Vision -->
-<section id="vision" class="bs-plaster" style="padding: 96px 20px">
+<section id="vision" class="bs-plaster bs-sec" style="padding: 96px 20px">
 <div style="max-width: 1160px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: 56px; align-items: center">
 <div style="flex: 1 1 420px; min-width: 0">
 <p style="margin: 0 0 12px; font-family: Figtree, system-ui, sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: #856A2A">Our Vision</p>
@@ -150,17 +161,17 @@ section h2,blockquote,.bs-reveal,.bs-card{animation:bs-reveal linear both;animat
 <blockquote style="margin: 0; padding: 26px 30px; background: #F5F0E3; border-radius: 12px; font-family: 'Cormorant Garamond', Georgia, serif; font-style: italic; font-size: 25px; line-height: 1.4; color: #1C1B19">For 16 years, Grace Monroe has lived into the vision that first brought this community together. By God's grace, we have seen lives transformed, families restored, dreams awakened, leaders empowered, and a city stirred.</blockquote>
 </div>
 <div style="flex: 1 1 380px; min-width: 0">
-<img src="assets/vision-family.jpg" alt="The Grace Monroe family gathered on the Bold Springs property before renovation" class="bs-reveal" style="width: 100%; height: 560px; object-fit: cover; border-radius: 0 999px 999px 0">
+<img src="assets/vision-family.jpg" alt="The Grace Monroe family gathered on the Bold Springs property before renovation" class="bs-reveal bs-vision-img" loading="lazy" decoding="async" style="width: 100%; height: 560px; object-fit: cover; border-radius: 0 999px 999px 0">
 </div>
 </div>
 </section>
 
 <!-- Challenge -->
-<section style="padding: 88px 20px; background: #F5F0E3">
+<section class="bs-sec" style="padding: 88px 20px; background: #F5F0E3">
 <div style="max-width: 1160px; margin: 0 auto">
 <p style="margin: 0 0 12px; font-family: Figtree, system-ui, sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: #856A2A; text-align: center">Why this matters now</p>
 <h2 style="margin: 0 auto 48px; max-width: 760px; text-align: center; font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 600; font-size: clamp(32px, 4.4vw, 52px); line-height: 1.12">The challenge isn't a lack of vision. It's a lack of capacity.</h2>
-<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px">
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); gap: 24px">
 <div class="bs-card" style="background: #FFFFFF; border-radius: 14px; padding: 32px">
 <div style="font-family: 'Cormorant Garamond', Georgia, serif; font-size: 48px; font-weight: 700; color: #52684F; line-height: 1">01</div>
 <h3 style="margin: 14px 0 10px; font-family: Figtree, system-ui, sans-serif; font-size: 20px; font-weight: 700; line-height: 1.3">We're running out of space</h3>
@@ -183,7 +194,7 @@ section h2,blockquote,.bs-reveal,.bs-card{animation:bs-reveal linear both;animat
 
 <!-- Scripture photo break -->
 <section aria-label="Isaiah 61" style="position: relative; min-height: 560px; display: flex; align-items: center; justify-content: center; padding: 72px 20px; overflow: hidden">
-<img src="assets/isaiah-61.jpg" alt="" style="position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover">
+<img src="assets/isaiah-61.jpg" alt="" loading="lazy" decoding="async" style="position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover">
 <div style="position: absolute; inset: 0; background: rgba(28,27,25,0.55)"></div>
 <div class="bs-reveal" style="position: relative; max-width: 760px; text-align: center; color: #FFFFFF">
 <p style="margin: 0; font-family: 'Cormorant Garamond', Georgia, serif; font-style: italic; font-weight: 500; font-size: clamp(26px, 3.6vw, 40px); line-height: 1.35">They will be called oaks of righteousness, a planting of the LORD for the display of his splendor. They will rebuild the ancient ruins and restore the places long devastated.</p>
@@ -192,7 +203,7 @@ section h2,blockquote,.bs-reveal,.bs-card{animation:bs-reveal linear both;animat
 </section>
 
 <!-- The Plan -->
-<section id="plan" class="bs-plaster" style="padding: 96px 20px">
+<section id="plan" class="bs-plaster bs-sec" style="padding: 96px 20px">
 <div style="max-width: 1160px; margin: 0 auto">
 <div style="display: flex; flex-wrap: wrap; gap: 24px 56px; align-items: flex-end; margin-bottom: 48px">
 <div style="flex: 1 1 420px; min-width: 0">
@@ -202,9 +213,9 @@ section h2,blockquote,.bs-reveal,.bs-card{animation:bs-reveal linear both;animat
 <p style="flex: 1 1 420px; min-width: 0; margin: 0">Through Acorns to Oaks, we turned the first three buildings of this 8.5-acre campus into our church home. This next phase activates two of the three remaining empty buildings, adds GraceKidz classrooms, creates outdoor gathering space, and addresses infrastructure. Each step begins once it is fully funded.</p>
 </div>
 
-<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 28px">
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: 28px">
 <article class="bs-card" style="border: 1px solid #E8E1CF; border-radius: 14px; overflow: hidden; background: #FFFFFF; display: flex; flex-direction: column">
-<img src="assets/step1-gathering-space.jpg" alt="Rendering of the renovated cafeteria as a large group gathering space" style="width: 100%; height: 210px; object-fit: cover">
+<img src="assets/step1-gathering-space.jpg" alt="Rendering of the renovated cafeteria as a large group gathering space" loading="lazy" decoding="async" style="width: 100%; height: 210px; object-fit: cover">
 <div style="padding: 24px 26px 28px; display: flex; flex-direction: column; gap: 8px">
 <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-family: Figtree, system-ui, sans-serif; font-weight: 700"><span style="font-size: 13px; letter-spacing: 0.16em; text-transform: uppercase; color: #856A2A">Step 1</span><span style="font-size: 20px">$1.5M</span></div>
 <h3 style="margin: 0; font-family: Figtree, system-ui, sans-serif; font-size: 21px; font-weight: 700; line-height: 1.3">Gathering Space &amp; Infrastructure</h3>
@@ -212,7 +223,7 @@ section h2,blockquote,.bs-reveal,.bs-card{animation:bs-reveal linear both;animat
 </div>
 </article>
 <article class="bs-card" style="border: 1px solid #E8E1CF; border-radius: 14px; overflow: hidden; background: #FFFFFF; display: flex; flex-direction: column">
-<img src="assets/step2-gracekidz.jpg" alt="Rendering of a new GraceKidz classroom" style="width: 100%; height: 210px; object-fit: cover">
+<img src="assets/step2-gracekidz.jpg" alt="Rendering of a new GraceKidz classroom" loading="lazy" decoding="async" style="width: 100%; height: 210px; object-fit: cover">
 <div style="padding: 24px 26px 28px; display: flex; flex-direction: column; gap: 8px">
 <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-family: Figtree, system-ui, sans-serif; font-weight: 700"><span style="font-size: 13px; letter-spacing: 0.16em; text-transform: uppercase; color: #856A2A">Step 2</span><span style="font-size: 20px">$500K</span></div>
 <h3 style="margin: 0; font-family: Figtree, system-ui, sans-serif; font-size: 21px; font-weight: 700; line-height: 1.3">GraceKidz Expansion</h3>
@@ -220,7 +231,7 @@ section h2,blockquote,.bs-reveal,.bs-card{animation:bs-reveal linear both;animat
 </div>
 </article>
 <article class="bs-card" style="border: 1px solid #E8E1CF; border-radius: 14px; overflow: hidden; background: #FFFFFF; display: flex; flex-direction: column">
-<img src="assets/step3-midland-hub.jpg" alt="Rendering of the renovated Midland Building" style="width: 100%; height: 210px; object-fit: cover">
+<img src="assets/step3-midland-hub.jpg" alt="Rendering of the renovated Midland Building" loading="lazy" decoding="async" style="width: 100%; height: 210px; object-fit: cover">
 <div style="padding: 24px 26px 28px; display: flex; flex-direction: column; gap: 8px">
 <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-family: Figtree, system-ui, sans-serif; font-weight: 700"><span style="font-size: 13px; letter-spacing: 0.16em; text-transform: uppercase; color: #856A2A">Step 3</span><span style="font-size: 20px">$2.0M</span></div>
 <h3 style="margin: 0; font-family: Figtree, system-ui, sans-serif; font-size: 21px; font-weight: 700; line-height: 1.3">Midland Ministry Hub</h3>
@@ -228,7 +239,7 @@ section h2,blockquote,.bs-reveal,.bs-card{animation:bs-reveal linear both;animat
 </div>
 </article>
 <article class="bs-card" style="border: 1px solid #E8E1CF; border-radius: 14px; overflow: hidden; background: #FFFFFF; display: flex; flex-direction: column">
-<img src="assets/step4-site-parking.jpg" alt="Rendering of new parking and site work along Midland Avenue" style="width: 100%; height: 210px; object-fit: cover">
+<img src="assets/step4-site-parking.jpg" alt="Rendering of new parking and site work along Midland Avenue" loading="lazy" decoding="async" style="width: 100%; height: 210px; object-fit: cover">
 <div style="padding: 24px 26px 28px; display: flex; flex-direction: column; gap: 8px">
 <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-family: Figtree, system-ui, sans-serif; font-weight: 700"><span style="font-size: 13px; letter-spacing: 0.16em; text-transform: uppercase; color: #856A2A">Step 4</span><span style="font-size: 20px">$500K</span></div>
 <h3 style="margin: 0; font-family: Figtree, system-ui, sans-serif; font-size: 21px; font-weight: 700; line-height: 1.3">Site Work &amp; Parking</h3>
@@ -236,7 +247,7 @@ section h2,blockquote,.bs-reveal,.bs-card{animation:bs-reveal linear both;animat
 </div>
 </article>
 <article class="bs-card" style="border: 1px solid #E8E1CF; border-radius: 14px; overflow: hidden; background: #FFFFFF; display: flex; flex-direction: column">
-<img src="assets/step5-kitchen.jpg" alt="Rendering of the Grace Kitchen community commercial kitchen exterior" style="width: 100%; height: 210px; object-fit: cover">
+<img src="assets/step5-kitchen.jpg" alt="Rendering of the Grace Kitchen community commercial kitchen exterior" loading="lazy" decoding="async" style="width: 100%; height: 210px; object-fit: cover">
 <div style="padding: 24px 26px 28px; display: flex; flex-direction: column; gap: 8px">
 <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-family: Figtree, system-ui, sans-serif; font-weight: 700"><span style="font-size: 13px; letter-spacing: 0.16em; text-transform: uppercase; color: #856A2A">Step 5</span><span style="font-size: 20px">$500K</span></div>
 <h3 style="margin: 0; font-family: Figtree, system-ui, sans-serif; font-size: 21px; font-weight: 700; line-height: 1.3">Community Commercial Kitchen</h3>
@@ -275,14 +286,14 @@ section h2,blockquote,.bs-reveal,.bs-card{animation:bs-reveal linear both;animat
 </section>
 
 <!-- Making room -->
-<section style="padding: 88px 20px; background: #363E59; color: #FFFFFF">
+<section class="bs-sec" style="padding: 88px 20px; background: #363E59; color: #FFFFFF">
 <div style="max-width: 1160px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: 48px; align-items: center">
 <div style="flex: 1 1 380px; min-width: 0">
 <p style="margin: 0 0 12px; font-family: Figtree, system-ui, sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: #D9C59A">The invitation</p>
 <h2 style="margin: 0 0 20px; font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 600; font-size: clamp(34px, 4.4vw, 52px); line-height: 1.1">This is about making room.</h2>
 <p style="margin: 0; font-size: 20px">We don't want to simply build a bigger church. We want to be a church measured more by our sending and serving capacity than our seating capacity.</p>
 </div>
-<ul class="bs-reveal" style="flex: 1 1 420px; min-width: 0; margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px 28px; font-size: 19px">
+<ul class="bs-reveal" style="flex: 1 1 420px; min-width: 0; margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: 14px 28px; font-size: 19px">
 <li style="padding-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.25)">Room for a child to discover Jesus</li>
 <li style="padding-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.25)">Room for a student to discover purpose</li>
 <li style="padding-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.25)">Room for a leader to discover their calling</li>
@@ -296,12 +307,12 @@ section h2,blockquote,.bs-reveal,.bs-card{animation:bs-reveal linear both;animat
 </section>
 
 <!-- Respond -->
-<section id="respond" class="bs-plaster" style="padding: 96px 20px">
+<section id="respond" class="bs-plaster bs-sec" style="padding: 96px 20px">
 <div style="max-width: 1160px; margin: 0 auto">
 <p style="margin: 0 0 12px; font-family: Figtree, system-ui, sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: #856A2A; text-align: center">Commit to our next season</p>
 <h2 style="margin: 0 auto 16px; max-width: 760px; text-align: center; font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 600; font-size: clamp(34px, 4.4vw, 52px); line-height: 1.1">Pray. Commit. Give.</h2>
 <p style="margin: 0 auto 48px; max-width: 680px; text-align: center">This campaign is an invitation, not an obligation. We're asking every Grace Monroe family to prayerfully consider a gift over and above regular tithes and offerings.</p>
-<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px">
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); gap: 24px">
 <div class="bs-card" style="padding: 32px; border-radius: 14px; background: #F5F0E3">
 <h3 style="margin: 0 0 10px; font-family: Figtree, system-ui, sans-serif; font-size: 22px; font-weight: 800; color: #856A2A">1. Pray a bold prayer</h3>
 <p style="margin: 0; font-size: 18px">Before landing on a number, pray: <em>"God, out of what You've placed in my hands, what would You have me give, over and above my regular church giving, to this project?"</em></p>
@@ -316,12 +327,12 @@ section h2,blockquote,.bs-reveal,.bs-card{animation:bs-reveal linear both;animat
 </div>
 </div>
 
-<div class="bs-reveal" style="margin-top: 40px; padding: 40px 32px; border-radius: 14px; background: #856A2A; color: #FFFFFF; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 24px">
+<div class="bs-reveal bs-cta" style="margin-top: 40px; padding: 40px 32px; border-radius: 14px; background: #856A2A; color: #FFFFFF; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 24px">
 <div style="flex: 1 1 360px; min-width: 0">
 <p style="margin: 0; font-family: Figtree, system-ui, sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase">Commitment Sunday</p>
 <p style="margin: 4px 0 0; font-family: 'Cormorant Garamond', Georgia, serif; font-size: clamp(34px, 4vw, 48px); font-weight: 700; line-height: 1.1">November 15, 2026</p>
 </div>
-<div style="display: flex; flex-wrap: wrap; gap: 14px">
+<div class="bs-cta-row" style="display: flex; flex-wrap: wrap; gap: 14px">
 <a href="https://graceformonroe.churchcenter.com/giving" target="_blank" rel="noopener" class="bs-btn-ghost" style="min-height: 52px; padding: 14px 28px; border-radius: 999px; background: #FFFFFF; color: #1C1B19; font-family: Figtree, system-ui, sans-serif; font-size: 16px; font-weight: 700; text-decoration: none; display: inline-flex; align-items: center">Make my pledge</a>
 <a href="https://graceformonroe.churchcenter.com/giving" target="_blank" rel="noopener" class="bs-btn-ghost" style="min-height: 52px; padding: 14px 28px; border-radius: 999px; border: 2px solid #FFFFFF; color: #FFFFFF; font-family: Figtree, system-ui, sans-serif; font-size: 16px; font-weight: 700; text-decoration: none; display: inline-flex; align-items: center">Give to Bold Springs</a>
 </div>
@@ -330,7 +341,7 @@ section h2,blockquote,.bs-reveal,.bs-card{animation:bs-reveal linear both;animat
 </section>
 
 <!-- FAQ -->
-<section id="faq" style="padding: 96px 20px; background: #F5F0E3">
+<section id="faq" class="bs-sec" style="padding: 96px 20px; background: #F5F0E3">
 <div style="max-width: 860px; margin: 0 auto">
 <p style="margin: 0 0 12px; font-family: Figtree, system-ui, sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: #856A2A; text-align: center">Questions</p>
 <h2 style="margin: 0 0 48px; text-align: center; font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 600; font-size: clamp(34px, 4.4vw, 52px); line-height: 1.1">Frequently Asked Questions</h2>
@@ -421,7 +432,7 @@ section h2,blockquote,.bs-reveal,.bs-card{animation:bs-reveal linear both;animat
 <div style="font-family: 'Cormorant Garamond', Georgia, serif; font-style: italic; font-size: 19px; letter-spacing: 0.1em">growing into the next season</div>
 </div>
 </div>
-<a href="https://www.graceformonroe.com" style="color: #FFFFFF; font-family: 'Cormorant Garamond', Georgia, serif; font-style: italic; font-size: 22px; letter-spacing: 0.1em; text-decoration: none">www.graceformonroe.com</a>
+<a href="https://www.graceformonroe.com" class="bs-foot-link" style="color: #FFFFFF; font-family: 'Cormorant Garamond', Georgia, serif; font-style: italic; font-size: 22px; letter-spacing: 0.1em; text-decoration: none">www.graceformonroe.com</a>
 </div>
 </footer>
 
