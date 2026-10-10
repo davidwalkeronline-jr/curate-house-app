@@ -70,3 +70,24 @@ target_link_libraries(CurateDrumPad
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags
         juce::juce_recommended_warning_flags)
+
+# Headless engine tests: cmake -DDRUMPAD_BUILD_TESTS=ON, then run DrumPadTests.
+option(DRUMPAD_BUILD_TESTS "Build the engine test runner" OFF)
+
+if(DRUMPAD_BUILD_TESTS)
+    juce_add_console_app(DrumPadTests PRODUCT_NAME "DrumPadTests")
+    target_sources(DrumPadTests PRIVATE
+        Tests/EngineTests.cpp
+        Source/PluginProcessor.cpp
+        Source/PluginEditor.cpp)
+    target_include_directories(DrumPadTests PRIVATE Source)
+    target_compile_definitions(DrumPadTests PRIVATE
+        JUCE_WEB_BROWSER=0
+        JUCE_USE_CURL=0
+        JUCE_USE_MP3AUDIOFORMAT=1
+        JucePlugin_Name="Curate Drum Pad")
+    target_link_libraries(DrumPadTests PRIVATE
+        juce::juce_audio_utils
+        juce::juce_audio_formats
+        juce::juce_recommended_config_flags)
+endif()

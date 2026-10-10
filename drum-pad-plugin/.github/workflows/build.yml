@@ -1,0 +1,68 @@
+name: Build plugin
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            name: macOS
+          - os: windows-2022
+            name: Windows
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DDRUMPAD_BUILD_TESTS=ON
+
+      - name: Build
+        run: cmake --build build --config Release --parallel 4
+
+      - name: Run engine tests
+        shell: bash
+        run: |
+          if [ -f build/DrumPadTests_artefacts/Release/DrumPadTests.exe ]; then
+            build/DrumPadTests_artefacts/Release/DrumPadTests.exe
+          else
+            build/DrumPadTests_artefacts/Release/DrumPadTests
+          fi
+
+      - name: Package (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p package
+          cp -R "build/CurateDrumPad_artefacts/Release/AAX/Curate Drum Pad.aaxplugin" package/
+          cp -R "build/CurateDrumPad_artefacts/Release/VST3/Curate Drum Pad.vst3" package/
+          cp -R "build/CurateDrumPad_artefacts/Release/AU/Curate Drum Pad.component" package/
+          cp -R "build/CurateDrumPad_artefacts/Release/Standalone/Curate Drum Pad.app" package/
+          cp scripts/install-mac.command package/
+          chmod +x package/install-mac.command
+          # A tarball keeps the executable permissions that a plain artifact zip would lose.
+          tar -czf CurateDrumPad-macOS.tar.gz -C package .
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force package | Out-Null
+          Copy-Item -Recurse "build/CurateDrumPad_artefacts/Release/AAX/Curate Drum Pad.aaxplugin" package/
+          Copy-Item -Recurse "build/CurateDrumPad_artefacts/Release/VST3/Curate Drum Pad.vst3" package/
+          Copy-Item "build/CurateDrumPad_artefacts/Release/Standalone/Curate Drum Pad.exe" package/
+          Copy-Item scripts/install-windows.ps1 package/
+          Compress-Archive -Path package/* -DestinationPath CurateDrumPad-Windows.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CurateDrumPad-${{ matrix.name }}
+          path: |
+            CurateDrumPad-macOS.tar.gz
+            CurateDrumPad-Windows.zip
+          if-no-files-found: error
