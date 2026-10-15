@@ -6,6 +6,7 @@ import { ANALYSIS_GRID } from './engine/spectrum.js';
 import { formatDb } from './engine/util.js';
 import { Player, fmtTime } from './ui/player.js';
 import { waveformPeaks, drawWaveform, drawTonal } from './ui/charts.js';
+import { makeZip } from './engine/zip.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -500,7 +501,34 @@ function renderReport() {
   );
 }
 
-function download(blob, name) {
+// Inside a claude.ai artifact, files are offered through the viewer's save
+// prompt (which accepts .zip and .txt but not .wav); elsewhere a normal
+// browser download is used.
+async function hostDownloads() {
+  try {
+    return window.claude?.use ? await window.claude.use('downloads') : null;
+  } catch {
+    return null;
+  }
+}
+
+async function download(blob, name) {
+  const host = await hostDownloads();
+  if (host) {
+    let data = blob;
+    let filename = name;
+    if (/\.wav$/i.test(name)) {
+      data = makeZip([{ name, data: new Uint8Array(await blob.arrayBuffer()) }]);
+      filename = name.replace(/\.wav$/i, '.zip');
+    }
+    try {
+      await host.save({ filename, data });
+      toast('Saved ' + filename);
+    } catch (err) {
+      if (err?.code !== 'declined') toast('This view cannot save files. Open the Studio in a full browser tab to export.');
+    }
+    return;
+  }
   const url = URL.createObjectURL(blob);
   const a = el('a', { href: url, download: name });
   document.body.append(a);
