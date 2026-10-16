@@ -1,3 +1,7 @@
+# Deploy target: Netlify project "bold-springs-campaign-landing-page-cd-b3c2cd4bd1"
+# (site id 866b8df4-8850-4e76-8402-887983befe33), served at https://boldsprings.vision.
+# All updates to this site go to that project only.
+
 [build]
   publish = "."
 
