@@ -15,6 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&amp;family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&amp;family=Figtree:wght@500;600;700;800&amp;display=swap">
 <style>
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 body{margin:0;background:#FFFFFF;color:#1C1B19}
 *{box-sizing:border-box}
 a{color:#856A2A}a:hover{color:#5E4B1C}
@@ -33,6 +34,42 @@ summary:focus-visible,a:focus-visible,button:focus-visible{outline:3px solid #85
 html{scroll-behavior:smooth}
 .bs-plaster{background-color:#FFFFFF}
 .bs-nav{flex-wrap:nowrap !important;white-space:nowrap}
+.bs-zoom img{transition:transform .9s cubic-bezier(.2,.7,.2,1),opacity .3s ease}
+.bs-zoom:hover img{opacity:.92}
+.bs-zoom-badge{transition:transform .3s ease,background-color .3s ease}
+.bs-zoom:hover .bs-zoom-badge{transform:scale(1.1);background:#856A2A !important}
+.bs-zoom:focus-visible{outline:3px solid #856A2A;outline-offset:-3px}
+.bs-lb{position:fixed;inset:0;z-index:1000;background:rgba(14,13,12,.96);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:64px 72px 116px;animation:bs-lb-fade .35s ease both;outline:none;touch-action:pan-y}
+.bs-lb-top{position:absolute;top:0;left:0;right:0;display:flex;align-items:center;justify-content:space-between;padding:12px 16px 12px 24px;color:#FFFFFF;font-family:Figtree,system-ui,sans-serif}
+.bs-lb-count{font-size:14px;font-weight:700;letter-spacing:.16em}
+.bs-lb-stage{margin:0;display:flex;flex-direction:column;align-items:center;gap:14px;max-width:100%;max-height:100%;min-height:0}
+.bs-lb-stage img{max-width:min(1400px,100%);max-height:calc(100vh - 230px);width:auto;height:auto;object-fit:contain;border-radius:8px;box-shadow:0 24px 70px rgba(0,0,0,.5)}
+.bs-lb-cap{color:#FFFFFF;font-family:'Cormorant Garamond',Georgia,serif;font-size:24px;font-weight:600;text-align:center}
+.bs-lb-btn{width:48px;height:48px;border-radius:50%;border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.08);color:#FFFFFF;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background-color .25s ease,transform .25s ease}
+.bs-lb-btn:hover{background:#856A2A;border-color:#856A2A}
+.bs-lb-nav{position:absolute;top:50%;margin-top:-58px}
+.bs-lb-prev{left:16px}.bs-lb-next{right:16px}
+.bs-lb-prev:hover{transform:translateX(-2px)}.bs-lb-next:hover{transform:translateX(2px)}
+.bs-lb-thumbs{position:absolute;bottom:16px;left:0;right:0;display:flex;justify-content:center;gap:10px;padding:0 16px;overflow-x:auto}
+.bs-lb-thumb,.bs-lb-thumb-on{flex:0 0 auto;width:76px;height:52px;padding:0;border-radius:6px;overflow:hidden;cursor:pointer;background:#000;transition:opacity .25s ease,border-color .25s ease}
+.bs-lb-thumb{border:2px solid transparent;opacity:.5}
+.bs-lb-thumb:hover{opacity:.85}
+.bs-lb-thumb-on{border:2px solid #D9C59A;opacity:1}
+.bs-lb-thumbs img{width:100%;height:100%;object-fit:cover}
+.bs-lb-a{animation:bs-lb-in-a .45s cubic-bezier(.2,.7,.2,1) both}
+.bs-lb-b{animation:bs-lb-in-b .45s cubic-bezier(.2,.7,.2,1) both}
+@keyframes bs-lb-fade{from{opacity:0}to{opacity:1}}
+@keyframes bs-lb-in-a{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:none}}
+@keyframes bs-lb-in-b{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:none}}
+@media (max-width: 640px){
+.bs-lb{padding:60px 12px 96px}
+.bs-lb-nav{top:auto;bottom:88px;margin-top:0;width:44px;height:44px}
+.bs-lb-stage img{max-height:calc(100vh - 260px)}
+.bs-lb-cap{font-size:20px;padding:0 52px}
+.bs-lb-thumb,.bs-lb-thumb-on{width:56px;height:40px}
+.bs-lb-thumbs{justify-content:flex-start}
+}
+@media (prefers-reduced-motion: reduce){.bs-lb,.bs-lb-a,.bs-lb-b{animation:none}}
 @media (max-width: 640px){
 .bs-head{justify-content:center !important;padding:10px 14px !important}
 .bs-logo{width:72px !important;height:72px !important}
@@ -44,9 +81,6 @@ html{scroll-behavior:smooth}
 .bs-sec{padding-top:64px !important;padding-bottom:64px !important}
 .bs-vision-img{height:380px !important}
 .bs-soon{letter-spacing:0.16em !important;padding-left:0.16em !important}
-.bs-cta{padding:32px 22px !important}
-.bs-cta-row{width:100%}
-.bs-cta-row a{flex:1 1 100%;justify-content:center}
 .bs-foot-link{min-height:44px;display:inline-flex;align-items:center}
 .bs-faq summary{font-size:17px !important}
 }
@@ -86,6 +120,7 @@ section h2,blockquote,.bs-reveal,.bs-card{animation:bs-reveal linear both;animat
 }
 @media (prefers-reduced-motion: reduce){html{scroll-behavior:auto}.bs-card:hover,.bs-btn:hover,.bs-btn-ghost:hover{transform:none}.bs-card:hover img{transform:none}}
 </style>
+<style>.bs-lb[hidden]{display:none}.bs-lb-thumbs button{flex:0 0 auto}</style>
 </head>
 <body>
 <div style="width: 100%; font-family: 'EB Garamond', Georgia, serif; font-size: 19px; line-height: 1.6; color: #1C1B19; background: #FFFFFF">
@@ -102,7 +137,6 @@ section h2,blockquote,.bs-reveal,.bs-card{animation:bs-reveal linear both;animat
 <a href="#plan">The Plan</a>
 <a href="#respond">Respond</a>
 <a href="#faq">FAQ</a>
-<a href="#respond" class="bs-btn" style="background: #856A2A; color: #FFFFFF; padding: 12px 22px; border-radius: 999px; min-height: 44px; display: inline-flex; align-items: center">Pledge</a>
 </nav>
 </div>
 </header>
@@ -177,9 +211,9 @@ section h2,blockquote,.bs-reveal,.bs-card{animation:bs-reveal linear both;animat
 <h3 style="margin: 14px 0 10px; font-family: Figtree, system-ui, sans-serif; font-size: 20px; font-weight: 700; line-height: 1.3">We're running out of space</h3>
 <p style="margin: 0; font-size: 18px">For the first time in our history we've had to cap KidzLife. Students have no room to grow, and there is no space left for discipleship classes, groups, or our ministry team.</p>
 </div>
-<div class="bs-card" style="background: #FFFFFF; border-radius: 14px; padding: 32px">
+<div class="bs-card" style="background: #FFFFFF; border-radius: 14px; padding: 32px; position: relative">
 <div style="font-family: 'Cormorant Garamond', Georgia, serif; font-size: 48px; font-weight: 700; color: #52684F; line-height: 1">02</div>
-<h3 style="margin: 14px 0 10px; font-family: Figtree, system-ui, sans-serif; font-size: 20px; font-weight: 700; line-height: 1.3">A 120-year-old campus has real needs</h3>
+<h3 style="margin: 14px 0 10px; font-family: Figtree, system-ui, sans-serif; font-size: 20px; font-weight: 700; line-height: 1.3">A 100-year-old campus has real needs</h3>
 <p style="margin: 0; font-size: 18px">Our historic school building is packed with potential, and it also carries aging infrastructure, including significant stormwater issues, that need attention.</p>
 </div>
 <div class="bs-card" style="background: #FFFFFF; border-radius: 14px; padding: 32px">
@@ -215,7 +249,10 @@ section h2,blockquote,.bs-reveal,.bs-card{animation:bs-reveal linear both;animat
 
 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: 28px">
 <article class="bs-card" style="border: 1px solid #E8E1CF; border-radius: 14px; overflow: hidden; background: #FFFFFF; display: flex; flex-direction: column">
+<button type="button" class="bs-zoom" data-gallery="0" data-title="Gathering Space &amp; Infrastructure" aria-label="Enlarge rendering: Gathering Space &amp; Infrastructure" style="position: relative; display: block; width: 100%; padding: 0; margin: 0; border: 0; background: #1C1B19; cursor: zoom-in; overflow: hidden">
 <img src="assets/step1-gathering-space.jpg" alt="Rendering of the renovated cafeteria as a large group gathering space" loading="lazy" decoding="async" style="width: 100%; height: 210px; object-fit: cover">
+<span class="bs-zoom-badge" aria-hidden="true" style="position: absolute; right: 12px; bottom: 12px; width: 40px; height: 40px; border-radius: 50%; background: rgba(28,27,25,0.72); display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"></path><path d="M9 21H3v-6"></path><path d="M21 3l-7 7"></path><path d="M3 21l7-7"></path></svg></span>
+</button>
 <div style="padding: 24px 26px 28px; display: flex; flex-direction: column; gap: 8px">
 <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-family: Figtree, system-ui, sans-serif; font-weight: 700"><span style="font-size: 13px; letter-spacing: 0.16em; text-transform: uppercase; color: #856A2A">Step 1</span><span style="font-size: 20px">$1.5M</span></div>
 <h3 style="margin: 0; font-family: Figtree, system-ui, sans-serif; font-size: 21px; font-weight: 700; line-height: 1.3">Gathering Space &amp; Infrastructure</h3>
@@ -223,7 +260,10 @@ section h2,blockquote,.bs-reveal,.bs-card{animation:bs-reveal linear both;animat
 </div>
 </article>
 <article class="bs-card" style="border: 1px solid #E8E1CF; border-radius: 14px; overflow: hidden; background: #FFFFFF; display: flex; flex-direction: column">
+<button type="button" class="bs-zoom" data-gallery="1" data-title="GraceKidz Expansion" aria-label="Enlarge rendering: GraceKidz Expansion" style="position: relative; display: block; width: 100%; padding: 0; margin: 0; border: 0; background: #1C1B19; cursor: zoom-in; overflow: hidden">
 <img src="assets/step2-gracekidz.jpg" alt="Rendering of a new GraceKidz classroom" loading="lazy" decoding="async" style="width: 100%; height: 210px; object-fit: cover">
+<span class="bs-zoom-badge" aria-hidden="true" style="position: absolute; right: 12px; bottom: 12px; width: 40px; height: 40px; border-radius: 50%; background: rgba(28,27,25,0.72); display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"></path><path d="M9 21H3v-6"></path><path d="M21 3l-7 7"></path><path d="M3 21l7-7"></path></svg></span>
+</button>
 <div style="padding: 24px 26px 28px; display: flex; flex-direction: column; gap: 8px">
 <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-family: Figtree, system-ui, sans-serif; font-weight: 700"><span style="font-size: 13px; letter-spacing: 0.16em; text-transform: uppercase; color: #856A2A">Step 2</span><span style="font-size: 20px">$500K</span></div>
 <h3 style="margin: 0; font-family: Figtree, system-ui, sans-serif; font-size: 21px; font-weight: 700; line-height: 1.3">GraceKidz Expansion</h3>
@@ -231,7 +271,10 @@ section h2,blockquote,.bs-reveal,.bs-card{animation:bs-reveal linear both;animat
 </div>
 </article>
 <article class="bs-card" style="border: 1px solid #E8E1CF; border-radius: 14px; overflow: hidden; background: #FFFFFF; display: flex; flex-direction: column">
+<button type="button" class="bs-zoom" data-gallery="2" data-title="Midland Ministry Hub" aria-label="Enlarge rendering: Midland Ministry Hub" style="position: relative; display: block; width: 100%; padding: 0; margin: 0; border: 0; background: #1C1B19; cursor: zoom-in; overflow: hidden">
 <img src="assets/step3-midland-hub.jpg" alt="Rendering of the renovated Midland Building" loading="lazy" decoding="async" style="width: 100%; height: 210px; object-fit: cover">
+<span class="bs-zoom-badge" aria-hidden="true" style="position: absolute; right: 12px; bottom: 12px; width: 40px; height: 40px; border-radius: 50%; background: rgba(28,27,25,0.72); display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"></path><path d="M9 21H3v-6"></path><path d="M21 3l-7 7"></path><path d="M3 21l7-7"></path></svg></span>
+</button>
 <div style="padding: 24px 26px 28px; display: flex; flex-direction: column; gap: 8px">
 <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-family: Figtree, system-ui, sans-serif; font-weight: 700"><span style="font-size: 13px; letter-spacing: 0.16em; text-transform: uppercase; color: #856A2A">Step 3</span><span style="font-size: 20px">$2.0M</span></div>
 <h3 style="margin: 0; font-family: Figtree, system-ui, sans-serif; font-size: 21px; font-weight: 700; line-height: 1.3">Midland Ministry Hub</h3>
@@ -239,7 +282,10 @@ section h2,blockquote,.bs-reveal,.bs-card{animation:bs-reveal linear both;animat
 </div>
 </article>
 <article class="bs-card" style="border: 1px solid #E8E1CF; border-radius: 14px; overflow: hidden; background: #FFFFFF; display: flex; flex-direction: column">
+<button type="button" class="bs-zoom" data-gallery="3" data-title="Site Work &amp; Parking" aria-label="Enlarge rendering: Site Work &amp; Parking" style="position: relative; display: block; width: 100%; padding: 0; margin: 0; border: 0; background: #1C1B19; cursor: zoom-in; overflow: hidden">
 <img src="assets/step4-site-parking.jpg" alt="Rendering of new parking and site work along Midland Avenue" loading="lazy" decoding="async" style="width: 100%; height: 210px; object-fit: cover">
+<span class="bs-zoom-badge" aria-hidden="true" style="position: absolute; right: 12px; bottom: 12px; width: 40px; height: 40px; border-radius: 50%; background: rgba(28,27,25,0.72); display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"></path><path d="M9 21H3v-6"></path><path d="M21 3l-7 7"></path><path d="M3 21l7-7"></path></svg></span>
+</button>
 <div style="padding: 24px 26px 28px; display: flex; flex-direction: column; gap: 8px">
 <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-family: Figtree, system-ui, sans-serif; font-weight: 700"><span style="font-size: 13px; letter-spacing: 0.16em; text-transform: uppercase; color: #856A2A">Step 4</span><span style="font-size: 20px">$500K</span></div>
 <h3 style="margin: 0; font-family: Figtree, system-ui, sans-serif; font-size: 21px; font-weight: 700; line-height: 1.3">Site Work &amp; Parking</h3>
@@ -247,7 +293,10 @@ section h2,blockquote,.bs-reveal,.bs-card{animation:bs-reveal linear both;animat
 </div>
 </article>
 <article class="bs-card" style="border: 1px solid #E8E1CF; border-radius: 14px; overflow: hidden; background: #FFFFFF; display: flex; flex-direction: column">
+<button type="button" class="bs-zoom" data-gallery="4" data-title="Community Commercial Kitchen" aria-label="Enlarge rendering: Community Commercial Kitchen" style="position: relative; display: block; width: 100%; padding: 0; margin: 0; border: 0; background: #1C1B19; cursor: zoom-in; overflow: hidden">
 <img src="assets/step5-kitchen.jpg" alt="Rendering of the Grace Kitchen community commercial kitchen exterior" loading="lazy" decoding="async" style="width: 100%; height: 210px; object-fit: cover">
+<span class="bs-zoom-badge" aria-hidden="true" style="position: absolute; right: 12px; bottom: 12px; width: 40px; height: 40px; border-radius: 50%; background: rgba(28,27,25,0.72); display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"></path><path d="M9 21H3v-6"></path><path d="M21 3l-7 7"></path><path d="M3 21l7-7"></path></svg></span>
+</button>
 <div style="padding: 24px 26px 28px; display: flex; flex-direction: column; gap: 8px">
 <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-family: Figtree, system-ui, sans-serif; font-weight: 700"><span style="font-size: 13px; letter-spacing: 0.16em; text-transform: uppercase; color: #856A2A">Step 5</span><span style="font-size: 20px">$500K</span></div>
 <h3 style="margin: 0; font-family: Figtree, system-ui, sans-serif; font-size: 21px; font-weight: 700; line-height: 1.3">Community Commercial Kitchen</h3>
@@ -264,6 +313,10 @@ section h2,blockquote,.bs-reveal,.bs-card{animation:bs-reveal linear both;animat
 <p style="margin: 0; font-size: 18px">Retire our existing campus mortgage so that within five years Grace Monroe carries zero debt into its next season of ministry.</p>
 </div>
 </article>
+</div>
+
+<div style="margin-top: 32px; display: flex; justify-content: center">
+<button type="button" class="bs-btn" data-gallery="0" style="min-height: 52px; padding: 14px 30px; border: 0; border-radius: 999px; background: #856A2A; color: #FFFFFF; font-family: Figtree, system-ui, sans-serif; font-size: 16px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 10px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="9" cy="9" r="2"></circle><path d="M21 15l-5-5L5 21"></path></svg>View the renderings</button>
 </div>
 
 <!-- Financial pathway -->
@@ -327,16 +380,6 @@ section h2,blockquote,.bs-reveal,.bs-card{animation:bs-reveal linear both;animat
 </div>
 </div>
 
-<div class="bs-reveal bs-cta" style="margin-top: 40px; padding: 40px 32px; border-radius: 14px; background: #856A2A; color: #FFFFFF; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 24px">
-<div style="flex: 1 1 360px; min-width: 0">
-<p style="margin: 0; font-family: Figtree, system-ui, sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase">Commitment Sunday</p>
-<p style="margin: 4px 0 0; font-family: 'Cormorant Garamond', Georgia, serif; font-size: clamp(34px, 4vw, 48px); font-weight: 700; line-height: 1.1">November 15, 2026</p>
-</div>
-<div class="bs-cta-row" style="display: flex; flex-wrap: wrap; gap: 14px">
-<a href="https://graceformonroe.churchcenter.com/giving" target="_blank" rel="noopener" class="bs-btn-ghost" style="min-height: 52px; padding: 14px 28px; border-radius: 999px; background: #FFFFFF; color: #1C1B19; font-family: Figtree, system-ui, sans-serif; font-size: 16px; font-weight: 700; text-decoration: none; display: inline-flex; align-items: center">Make my pledge</a>
-<a href="https://graceformonroe.churchcenter.com/giving" target="_blank" rel="noopener" class="bs-btn-ghost" style="min-height: 52px; padding: 14px 28px; border-radius: 999px; border: 2px solid #FFFFFF; color: #FFFFFF; font-family: Figtree, system-ui, sans-serif; font-size: 16px; font-weight: 700; text-decoration: none; display: inline-flex; align-items: center">Give to Bold Springs</a>
-</div>
-</div>
 </div>
 </section>
 
@@ -436,6 +479,82 @@ section h2,blockquote,.bs-reveal,.bs-card{animation:bs-reveal linear both;animat
 </div>
 </footer>
 
+
 </div>
+<div class="bs-lb" id="bs-lb" role="dialog" aria-modal="true" aria-label="Bold Springs renderings" tabindex="-1" hidden>
+<div class="bs-lb-top">
+<span class="bs-lb-count" id="bs-lb-count"></span>
+<button type="button" class="bs-lb-btn bs-lb-close" id="bs-lb-close" aria-label="Close gallery"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6L6 18"></path><path d="M6 6l12 12"></path></svg></button>
+</div>
+<figure class="bs-lb-stage">
+<img id="bs-lb-img" src="" alt="">
+<figcaption class="bs-lb-cap" id="bs-lb-cap"></figcaption>
+</figure>
+<button type="button" class="bs-lb-btn bs-lb-nav bs-lb-prev" id="bs-lb-prev" aria-label="Previous rendering"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"></path></svg></button>
+<button type="button" class="bs-lb-btn bs-lb-nav bs-lb-next" id="bs-lb-next" aria-label="Next rendering"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"></path></svg></button>
+<div class="bs-lb-thumbs" id="bs-lb-thumbs"></div>
+</div>
+<script>
+(function () {
+  var lb = document.getElementById('bs-lb');
+  var img = document.getElementById('bs-lb-img');
+  var cap = document.getElementById('bs-lb-cap');
+  var count = document.getElementById('bs-lb-count');
+  var thumbs = document.getElementById('bs-lb-thumbs');
+  var items = Array.prototype.map.call(document.querySelectorAll('.bs-zoom'), function (b) {
+    var i = b.querySelector('img');
+    return { src: i.getAttribute('src'), full: b.getAttribute('data-full') || i.getAttribute('src'), alt: i.alt, title: b.getAttribute('data-title') };
+  });
+  var cur = 0, tick = 0, opener = null, touchX = null;
+  items.forEach(function (it, k) {
+    var t = document.createElement('button');
+    t.type = 'button';
+    t.setAttribute('aria-label', 'Show ' + it.title);
+    t.innerHTML = '<img src="' + it.src + '" alt="">';
+    t.addEventListener('click', function (e) { e.stopPropagation(); show(k); });
+    thumbs.appendChild(t);
+  });
+  function show(i) {
+    cur = (i + items.length) % items.length;
+    var it = items[cur];
+    img.className = (++tick % 2) ? 'bs-lb-a' : 'bs-lb-b';
+    img.src = it.full; img.alt = it.alt;
+    cap.textContent = it.title;
+    count.textContent = (cur + 1) + ' / ' + items.length;
+    Array.prototype.forEach.call(thumbs.children, function (t, k) { t.className = k === cur ? 'bs-lb-thumb-on' : 'bs-lb-thumb'; });
+  }
+  function open(i) {
+    opener = document.activeElement;
+    show(i);
+    lb.hidden = false;
+    document.body.style.overflow = 'hidden';
+    lb.focus();
+  }
+  function close() {
+    lb.hidden = true;
+    document.body.style.overflow = '';
+    if (opener && opener.focus) opener.focus();
+  }
+  document.querySelectorAll('[data-gallery]').forEach(function (b) {
+    b.addEventListener('click', function () { open(parseInt(b.getAttribute('data-gallery'), 10) || 0); });
+  });
+  document.getElementById('bs-lb-close').addEventListener('click', close);
+  document.getElementById('bs-lb-prev').addEventListener('click', function (e) { e.stopPropagation(); show(cur - 1); });
+  document.getElementById('bs-lb-next').addEventListener('click', function (e) { e.stopPropagation(); show(cur + 1); });
+  lb.addEventListener('click', function (e) { if (e.target === lb || e.target.classList.contains('bs-lb-stage')) close(); });
+  lb.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') close();
+    else if (e.key === 'ArrowLeft') show(cur - 1);
+    else if (e.key === 'ArrowRight') show(cur + 1);
+  });
+  lb.addEventListener('touchstart', function (e) { touchX = e.touches[0].clientX; }, { passive: true });
+  lb.addEventListener('touchend', function (e) {
+    if (touchX == null) return;
+    var dx = e.changedTouches[0].clientX - touchX; touchX = null;
+    if (Math.abs(dx) > 50) show(dx < 0 ? cur + 1 : cur - 1);
+  });
+})();
+</script>
+
 </body>
 </html>
