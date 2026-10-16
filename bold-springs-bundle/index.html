@@ -55,11 +55,11 @@ html{scroll-behavior:smooth}
 .bs-lb-thumb:hover{opacity:.85}
 .bs-lb-thumb-on{border:2px solid #D9C59A;opacity:1}
 .bs-lb-thumbs img{width:100%;height:100%;object-fit:cover}
-.bs-lb-a{animation:bs-lb-in-a .45s cubic-bezier(.2,.7,.2,1) both}
-.bs-lb-b{animation:bs-lb-in-b .45s cubic-bezier(.2,.7,.2,1) both}
+.bs-lb-a{animation:bs-lb-in-a .22s ease-out both}
+.bs-lb-b{animation:bs-lb-in-b .22s ease-out both}
 @keyframes bs-lb-fade{from{opacity:0}to{opacity:1}}
-@keyframes bs-lb-in-a{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:none}}
-@keyframes bs-lb-in-b{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:none}}
+@keyframes bs-lb-in-a{from{opacity:.4;transform:scale(.985)}to{opacity:1;transform:none}}
+@keyframes bs-lb-in-b{from{opacity:.4;transform:scale(.985)}to{opacity:1;transform:none}}
 @media (max-width: 640px){
 .bs-lb{padding:60px 12px 96px}
 .bs-lb-nav{top:auto;bottom:88px;margin-top:0;width:44px;height:44px}
@@ -315,7 +315,7 @@ section h2,blockquote,.bs-reveal,.bs-card{animation:bs-reveal linear both;animat
 </div>
 
 <div style="margin-top: 32px; display: flex; justify-content: center">
-<button type="button" class="bs-btn" data-gallery="0" style="min-height: 52px; padding: 14px 30px; border: 0; border-radius: 999px; background: #856A2A; color: #FFFFFF; font-family: Figtree, system-ui, sans-serif; font-size: 16px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 10px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="9" cy="9" r="2"></circle><path d="M21 15l-5-5L5 21"></path></svg>View the renderings</button>
+<button type="button" class="bs-btn" data-gallery="0" style="min-height: 52px; padding: 14px 30px; border: 0; border-radius: 999px; background: #856A2A; color: #FFFFFF; font-family: Figtree, system-ui, sans-serif; font-size: 16px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 10px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="9" cy="9" r="2"></circle><path d="M21 15l-5-5L5 21"></path></svg>View Full Res Renderings</button>
 </div>
 
 <!-- Financial pathway -->
@@ -519,6 +519,14 @@ section h2,blockquote,.bs-reveal,.bs-card{animation:bs-reveal linear both;animat
     cap.textContent = it.title;
     count.textContent = (cur + 1) + ' / ' + items.length;
     Array.prototype.forEach.call(thumbs.children, function (t, k) { t.className = k === cur ? 'bs-lb-thumb-on' : 'bs-lb-thumb'; });
+    preload(cur + 1); preload(cur - 1);
+    if (!allQueued) { allQueued = true; setTimeout(function () { items.forEach(function (_, k) { preload(k); }); }, 600); }
+  }
+  var cache = {}, allQueued = false;
+  function preload(i) {
+    var src = items[(i + items.length) % items.length].full;
+    if (cache[src]) return;
+    var im = new Image(); im.decoding = 'async'; im.src = src; cache[src] = im;
   }
   function open(i) {
     opener = document.activeElement;
