@@ -1,0 +1,13 @@
+# Render blueprint for the Chord Chart Builder (page + YouTube/Spotify links + lyrics transcription).
+# Create it from the Render dashboard: New > Blueprint > pick this repository.
+services:
+  - type: web
+    name: curate-house-charts
+    runtime: docker
+    dockerfilePath: ./chart-builder/Dockerfile
+    dockerContext: ./chart-builder
+    plan: starter
+    healthCheckPath: /api/health
+    envVars:
+      - key: WHISPER_MODEL
+        value: base.en

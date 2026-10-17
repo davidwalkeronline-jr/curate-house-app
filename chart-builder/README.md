@@ -30,6 +30,10 @@ docker run -p 8787:8787 chord-chart-builder
 
 Then open http://localhost:8787. The image includes yt-dlp, faster-whisper, and the speech model. Deploy the same image to any host that runs containers (Render, Railway, Fly.io, a VPS) and the host's address is the app's address. Give it at least 1 GB of memory for the default model.
 
+### On Render
+
+The repository includes `render.yaml`. In Render, choose **New > Blueprint**, pick this repository, and confirm. Render builds the image and gives the app its own address (you can point a domain like charts.curate.house at it).
+
 ### Without Docker
 
 Needs Node 18 or newer and Python 3:
