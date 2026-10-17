@@ -80,7 +80,6 @@ html{scroll-behavior:smooth}
 .bs-nav a{min-height:44px;display:inline-flex;align-items:center}
 .bs-sec{padding-top:64px !important;padding-bottom:64px !important}
 .bs-vision-img{height:380px !important}
-.bs-soon{letter-spacing:0.16em !important;padding-left:0.16em !important}
 .bs-foot-link{min-height:44px;display:inline-flex;align-items:center}
 .bs-faq summary{font-size:17px !important}
 }
@@ -104,6 +103,9 @@ html{scroll-behavior:smooth}
 .bs-faq[open] > p{animation:bs-faq-in .45s ease both}
 .bs-play{transition:transform .35s ease}
 .bs-play:hover{transform:scale(1.08)}
+.bs-video-play:hover .bs-play{transform:scale(1.08)}
+.bs-video-play:focus-visible{outline:3px solid #FFFFFF;outline-offset:-8px;border-radius:14px}
+.bs-video-frame{position:absolute;inset:0;width:100%;height:100%;border:0;background:#000}
 @keyframes bs-faq-in{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
 @keyframes bs-rise{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
 @keyframes bs-pulse{0%{box-shadow:0 0 0 0 rgba(255,255,255,.55)}70%{box-shadow:0 0 0 22px rgba(255,255,255,0)}100%{box-shadow:0 0 0 0 rgba(255,255,255,0)}}
@@ -154,11 +156,13 @@ section h2,blockquote,.bs-reveal,.bs-card{animation:bs-reveal linear both;animat
 <div class="bs-rise bs-d5" style="position: relative; max-width: 1040px; margin: 0 auto">
 <!-- Campaign video: replace the contents of #campaign-video with the embed when ready -->
 <div id="campaign-video" style="position: relative; width: 100%; aspect-ratio: 16 / 9; border-radius: 14px; overflow: hidden; background: #1C1B19; box-shadow: 0 24px 60px rgba(28,27,25,0.35)">
-<img src="assets/video-poster.jpg" alt="" style="position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.55">
-<div style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 20px; color: #FFFFFF">
-<p class="bs-soon" style="margin: 0; font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 600; font-size: clamp(36px, 7vw, 72px); letter-spacing: 0.24em; line-height: 1.1; text-transform: uppercase; padding-left: 0.24em; text-shadow: 0 2px 18px rgba(0,0,0,0.45)">Coming Soon</p>
-<p style="margin: 0; font-family: Figtree, system-ui, sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase">The Bold Springs campaign video</p>
-</div>
+<img src="assets/video-poster.jpg" alt="" style="position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.7">
+<a href="https://www.youtube.com/watch?v=4Hlv5GctyKY" target="_blank" rel="noopener" class="bs-video-play" data-video="4Hlv5GctyKY" aria-label="Play the Bold Springs vision video" style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 20px; color: #FFFFFF; text-decoration: none; background: radial-gradient(ellipse at center, rgba(28,27,25,0.15) 0%, rgba(28,27,25,0.55) 100%)">
+<span class="bs-play" aria-hidden="true" style="width: 88px; height: 88px; border-radius: 50%; border: 2px solid #FFFFFF; background: rgba(133,106,42,0.92); display: flex; align-items: center; justify-content: center">
+<svg width="30" height="30" viewBox="0 0 24 24" fill="#FFFFFF" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"></path></svg>
+</span>
+<span style="font-family: Figtree, system-ui, sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; text-shadow: 0 1px 10px rgba(0,0,0,0.5)">Watch the Bold Springs vision</span>
+</a>
 </div>
 </div>
 </div>
@@ -558,6 +562,27 @@ section h2,blockquote,.bs-reveal,.bs-card{animation:bs-reveal linear both;animat
     if (touchX == null) return;
     var dx = e.changedTouches[0].clientX - touchX; touchX = null;
     if (Math.abs(dx) > 50) show(dx < 0 ? cur + 1 : cur - 1);
+  });
+})();
+</script>
+<script>
+(function () {
+  var link = document.querySelector('[data-video]');
+  if (!link) return;
+  link.addEventListener('click', function (e) {
+    e.preventDefault();
+    var frame = document.createElement('iframe');
+    frame.className = 'bs-video-frame';
+    frame.src = 'https://www.youtube-nocookie.com/embed/' + link.getAttribute('data-video') +
+      '?autoplay=1&controls=0&rel=0&modestbranding=1&playsinline=1&iv_load_policy=3&color=white';
+    frame.title = 'Bold Springs vision video';
+    frame.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen';
+    frame.allowFullscreen = true;
+    frame.referrerPolicy = 'strict-origin-when-cross-origin';
+    var box = document.getElementById('campaign-video');
+    box.innerHTML = '';
+    box.appendChild(frame);
+    frame.focus();
   });
 })();
 </script>
