@@ -208,6 +208,23 @@ var CBA=(function(){
     return name;
   }
 
+  // [[start, end, "C#:min"], ...] from the server -> one state per beat (24 = no chord)
+  var PC={C:0,'C#':1,Db:1,D:2,'D#':3,Eb:3,E:4,F:5,'F#':6,Gb:6,G:7,'G#':8,Ab:8,A:9,'A#':10,Bb:10,B:11};
+  function serverPath(segs,beatTimes,beatDur){
+    var nb=beatTimes.length,out=new Array(nb),j=0;
+    for(var b=0;b<nb;b++){
+      var t0=beatTimes[b],t1=b+1<nb?beatTimes[b+1]:t0+beatDur,ov=new Float32Array(25);
+      while(j<segs.length&&segs[j][1]<=t0)j++;
+      for(var k=j;k<segs.length&&segs[k][0]<t1;k++){
+        var m=/^([A-G][#b]?):(maj|min)/.exec(segs[k][2]),st=m&&PC[m[1]]!=null?PC[m[1]]*2+(m[2]==='min'?1:0):24;
+        ov[st]+=Math.min(t1,segs[k][1])-Math.max(t0,segs[k][0]);
+      }
+      var best=24;for(var s=0;s<25;s++)if(ov[s]>ov[best])best=s;
+      out[b]=best;
+    }
+    return out;
+  }
+
   // ---------- main ----------
   async function analyze(buf,opts,report){
     opts=opts||{};
@@ -254,10 +271,17 @@ var CBA=(function(){
       for(var i=0;i<12;i++)total[i]+=bChroma[b*12+i]*bRms[b];
     }
 
+    // Chords recognized on the server (a trained model) replace the template guesses below:
+    // each beat takes the chord that covers most of it.
+    var given=opts.chords&&opts.chords.length?serverPath(opts.chords,beatTimes,beatDur):null;
+
     // meter + downbeat phase from where chord changes and bass hits land
     var change=new Float32Array(nb),kmax=0;
     for(var b=0;b<nb;b++)if(bKick[b]>kmax)kmax=bKick[b];
-    for(var b=1;b<nb;b++){var a1=centered(bChroma,(b-1)*12),a2=centered(bChroma,b*12);change[b]=(1-corr(a1,a2))+0.3*(kmax?bKick[b]/kmax:0);}
+    for(var b=1;b<nb;b++){
+      var ch=given?(given[b]!==given[b-1]?1:0):(1-corr(centered(bChroma,(b-1)*12),centered(bChroma,b*12)));
+      change[b]=ch+0.3*(kmax?bKick[b]/kmax:0);
+    }
     function phaseScore(m){
       var best={m:m,p:0,s:-Infinity},all=0;
       for(var b=1;b<nb;b++)all+=change[b];all/=Math.max(1,nb-1);
@@ -272,13 +296,16 @@ var CBA=(function(){
     var beatPos=new Int32Array(nb);for(var b=0;b<nb;b++)beatPos[b]=((b-phase)%M+M)%M;
 
     report('chords',0.2,'Finding the key');await tick();
-    var path0=viterbi(emis,nb,null,beatPos,M);
+    var path0=given||viterbi(emis,nb,null,beatPos,M);
     var prof=profileKey(total);
     var dur=new Float32Array(25);path0.forEach(function(s){dur[s]++;});
     var first=-1,last=-1;for(var b=0;b<nb;b++)if(path0[b]!==24){if(first<0)first=path0[b];last=path0[b];}
     var bestK=0,bestV=-Infinity,totalD=0;for(var s=0;s<24;s++)totalD+=dur[s];
     for(var K=0;K<12;K++){
+      var dia=dur[K*2]+dur[((K+5)%12)*2]+dur[((K+7)%12)*2]+dur[((K+9)%12)*2+1]+dur[((K+2)%12)*2+1]+dur[((K+4)%12)*2+1];
       var v=1.3*dur[K*2]+dur[((K+5)%12)*2]+dur[((K+7)%12)*2]+dur[((K+9)%12)*2+1]+0.8*dur[((K+2)%12)*2+1]+0.5*dur[((K+4)%12)*2+1];
+      // chords outside the key count against it, so the most frequent chord does not win by default
+      v-=0.9*(totalD-dia);
       if(first===K*2)v+=0.12*totalD;
       if(last===K*2)v+=0.12*totalD;
       var pk=prof.filter(function(p){return !p.minor&&p.pc===K;})[0];
@@ -291,7 +318,7 @@ var CBA=(function(){
     var keyStr=isMinor?CBT.keyName(relMin,true):CBT.keyName(bestK,false);
     report('chords',0.6,'Key of '+keyStr);await tick();
 
-    var path=viterbi(emis,nb,keyPrior(bestK),beatPos,M);
+    var path=given||viterbi(emis,nb,keyPrior(bestK),beatPos,M);
     // slash chords: bass on the chord's third, clearly louder than the root
     var labels=new Array(nb);
     for(var b=0;b<nb;){

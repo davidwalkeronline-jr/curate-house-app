@@ -9,7 +9,7 @@ A standalone app that listens to a song and drafts a numbers chart modeled on th
 
 ## What it analyzes
 
-Chords, tempo, structure, and dynamics are analyzed in the browser. The server handles links and lyrics transcription.
+Chords are recognized on the server by [madmom](https://github.com/CPJKU/madmom)'s trained chord model, which is far more accurate on real recordings. Tempo, beats, structure, and dynamics are analyzed in the browser, and the browser falls back to a basic chord detector when the server is unreachable. The server also handles links and lyrics transcription.
 
 * tempo, beats, and downbeats
 * key and chords, including slash chords like 1/3
@@ -28,7 +28,7 @@ docker build -t chord-chart-builder chart-builder
 docker run -p 8787:8787 chord-chart-builder
 ```
 
-Then open http://localhost:8787. The image includes yt-dlp, faster-whisper, and the speech model. Deploy the same image to any host that runs containers (Render, Railway, Fly.io, a VPS) and the host's address is the app's address. Give it at least 1 GB of memory for the default model.
+Then open http://localhost:8787. The image includes yt-dlp, ffmpeg, madmom, faster-whisper, and the speech model. Deploy the same image to any host that runs containers (Render, Railway, Fly.io, a VPS) and the host's address is the app's address. Chord recognition and transcription are CPU heavy: a full CPU handles a song in about a minute or two, while Render's free plan (a tenth of a CPU) can take ten minutes or more.
 
 ### On Render
 
@@ -39,7 +39,9 @@ The repository includes `render.yaml`. In Render, choose **New > Blueprint**, pi
 Needs Node 18 or newer and Python 3:
 
 ```
-pip install yt-dlp faster-whisper
+pip install "numpy<2" cython scipy mido setuptools wheel
+pip install --no-build-isolation git+https://github.com/CPJKU/madmom
+pip install yt-dlp faster-whisper "numpy<2"
 node chart-builder/server/server.js
 ```
 
@@ -55,8 +57,7 @@ Any static host (Netlify, GitHub Pages) can serve this folder. `window.CB_CONFIG
 |---|---|---|
 | `PORT` | `8787` | Port to listen on |
 | `WHISPER_MODEL` | `base.en` | Speech model. `small.en` is more accurate and needs about 2 GB of memory |
-| `MAX_TRANSCRIBES` | `1` | Songs transcribed at the same time |
-| `MAX_UPLOAD_MB` | `40` | Largest audio accepted for transcription |
+| `MAX_UPLOAD_MB` | `40` | Largest audio accepted for chord and lyrics analysis |
 | `ALLOWED_ORIGINS` | `*` | Comma separated origins allowed to call the API, for example `https://curate.house` |
 | `MAX_DURATION` | `900` | Longest linked song accepted, in seconds |
 | `MAX_DOWNLOADS` | `3` | Link downloads allowed at the same time |
@@ -77,5 +78,6 @@ Keep yt-dlp up to date (`pip install -U yt-dlp`), since YouTube changes often. D
 * `js/pdf.js`: PDF layout
 * `js/app.js`: the editor
 * `server/server.js`: the server (page, links, lyrics)
+* `server/chords.py`: chord recognition
 * `server/transcribe.py`: lyrics transcription with word timings
 * `fonts/`: Open Sans, under the SIL Open Font License (`fonts/OFL.txt`)

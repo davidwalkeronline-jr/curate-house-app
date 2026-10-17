@@ -5,12 +5,12 @@
 var CBS=(function(){
   function service(){return ((window.CB_CONFIG&&window.CB_CONFIG.audioService)||'').replace(/\/+$/,'');}
 
-  // What the server can do: {links, lyrics}. Both false when the page runs without it.
+  // What the server can do: {links, lyrics, chords}. All false when the page runs without it.
   var healthP=null;
   function health(){
     if(!healthP)healthP=(location.protocol==='file:'&&!service()?Promise.resolve(null):
       fetch(service()+'/api/health').then(function(r){return r.ok?r.json():null;}).catch(function(){return null;}))
-      .then(function(h){return {links:!!(h&&h.links),lyrics:!!(h&&h.lyrics)};});
+      .then(function(h){return {links:!!(h&&h.links),lyrics:!!(h&&h.lyrics),chords:!!(h&&h.chords)};});
     return healthP;
   }
 
@@ -109,10 +109,18 @@ var CBS=(function(){
     for(var i=0;i<n;i++){var x=Math.max(-1,Math.min(1,pcm[i]));v.setInt16(44+i*2,x<0?x*0x8000:x*0x7FFF,true);}
     return new Blob([buf],{type:'audio/wav'});
   }
-  async function transcribe(pcm16){
-    var res=await api('/api/transcribe',{method:'POST',headers:{'Content-Type':'audio/wav'},body:wav16(pcm16,16000)});
-    return ((await res.json()).words||[]).filter(function(w){return w&&w.text;});
+  // One upload, then poll the job until the server has chords and/or lyrics.
+  async function analyzeAudio(pcm,rate,want,onStatus){
+    var q='?chords='+(want.chords?1:0)+'&lyrics='+(want.lyrics?1:0);
+    var job=await (await api('/api/analyze'+q,{method:'POST',headers:{'Content-Type':'audio/wav'},body:wav16(pcm,rate)})).json();
+    for(;;){
+      await new Promise(function(r){setTimeout(r,2500);});
+      var st=await (await api('/api/job?id='+encodeURIComponent(job.id))).json();
+      if(st.notes&&st.notes.length)console.warn('Server notes',st.notes);
+      if(st.status==='done')return Object.assign({notes:st.notes||[]},st.result||{});
+      onStatus(st);
+    }
   }
 
-  return {service:service,health:health,kind:kind,resolve:resolve,fetchAudio:fetchAudio,lyrics:lyrics,syncedWords:syncedWords,transcribe:transcribe};
+  return {service:service,health:health,kind:kind,resolve:resolve,fetchAudio:fetchAudio,lyrics:lyrics,syncedWords:syncedWords,analyzeAudio:analyzeAudio};
 })();

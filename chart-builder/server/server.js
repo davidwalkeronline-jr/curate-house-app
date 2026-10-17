@@ -1,7 +1,8 @@
 // Chord Chart Builder server.
 // Serves the builder page, turns YouTube or Spotify links into audio the browser can analyze
-// (yt-dlp; Spotify tracks are matched to the same song on YouTube), and transcribes sung
-// lyrics with word timings (faster-whisper via transcribe.py).
+// (yt-dlp; Spotify tracks are matched to the same song on YouTube), recognizes chords
+// (madmom via chords.py), and transcribes sung lyrics with word timings (faster-whisper via
+// transcribe.py).
 'use strict';
 const http=require('http');
 const {spawn}=require('child_process');
@@ -19,8 +20,6 @@ const STATIC_DIR=path.join(__dirname,'..');
 const MAX_DOWNLOADS=+process.env.MAX_DOWNLOADS||3;
 const RATE_LIMIT=+process.env.RATE_LIMIT||30; // API requests per IP per 10 minutes
 const PYTHON=process.env.PYTHON_PATH||'python3';
-const TRANSCRIBE_CMD=process.env.TRANSCRIBE_CMD||''; // override for testing: a command taking the audio path
-const MAX_TRANSCRIBES=+process.env.MAX_TRANSCRIBES||1;
 const MAX_UPLOAD=(+process.env.MAX_UPLOAD_MB||40)*1048576;
 
 const TYPES={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8',
@@ -177,43 +176,67 @@ async function streamAudio(id,res){
 }
 
 // ---------- lyrics ----------
-function transcribeCommand(file){
-  if(TRANSCRIBE_CMD)return [TRANSCRIBE_CMD,[file]];
-  return [PYTHON,[path.join(__dirname,'transcribe.py'),file]];
+// Chords (madmom) and lyrics (faster-whisper) run as background jobs: one upload, then the
+// page polls /api/job, so slow songs are not cut off by proxy timeouts.
+function scriptCommand(name,file){
+  const override=process.env[name.toUpperCase()+'_CMD'];
+  if(override)return [override,[file]];
+  return [PYTHON,[path.join(__dirname,name+'.py'),file]];
 }
-let transcribing=0;
+function runScript(name,file){
+  const [cmd,args]=scriptCommand(name,file);
+  return new Promise((resolve,reject)=>{
+    const p=spawn(cmd,args);
+    let out='',err='';
+    p.stdout.on('data',d=>out+=d);p.stderr.on('data',d=>err+=d);
+    p.on('error',()=>reject(new Error(name+' is not installed on this server.')));
+    p.on('close',code=>{
+      if(code!==0){console.error(name,err.slice(-2000));return reject(new Error(name+' failed.'));}
+      try{resolve(JSON.parse(out));}catch(e){reject(new Error('Unexpected response from '+name+'.'));}
+    });
+  });
+}
 function readBody(req,limit){
   return new Promise((resolve,reject)=>{
     const chunks=[];let size=0;
-    req.on('data',c=>{size+=c.length;if(size>limit){reject(httpError(413,'That audio is too large to transcribe.'));req.destroy();return;}chunks.push(c);});
+    req.on('data',c=>{size+=c.length;if(size>limit){reject(httpError(413,'That audio is too large.'));req.destroy();return;}chunks.push(c);});
     req.on('end',()=>resolve(Buffer.concat(chunks)));
     req.on('error',reject);
   });
 }
-async function transcribe(req){
-  if(transcribing>=MAX_TRANSCRIBES)throw httpError(503,'The lyrics transcriber is busy. Try again in a minute.');
-  transcribing++;
-  const file=path.join(os.tmpdir(),'ccb-'+process.pid+'-'+Date.now()+'-'+Math.random().toString(36).slice(2)+'.audio');
-  try{
-    const body=await readBody(req,MAX_UPLOAD);
-    if(!body.length)throw httpError(400,'No audio was sent.');
-    await fs.promises.writeFile(file,body);
-    const [cmd,args]=transcribeCommand(file);
-    return await new Promise((resolve,reject)=>{
-      const p=spawn(cmd,args);
-      let out='',err='';
-      p.stdout.on('data',d=>out+=d);p.stderr.on('data',d=>err+=d);
-      p.on('error',()=>reject(httpError(501,'Lyrics transcription is not installed on this server.')));
-      p.on('close',code=>{
-        if(code!==0){console.error(err);return reject(httpError(502,'Lyrics transcription failed.'));}
-        try{resolve(JSON.parse(out));}catch(e){reject(httpError(502,'Unexpected response from the transcriber.'));}
-      });
-    });
-  }finally{
-    transcribing--;
-    fs.promises.unlink(file).catch(()=>{});
-  }
+const jobs=new Map();
+let queue=Promise.resolve();
+async function startJob(req,u){
+  const want={chords:u.searchParams.get('chords')!=='0',lyrics:u.searchParams.get('lyrics')==='1'};
+  if(!want.chords&&!want.lyrics)throw httpError(400,'Nothing to do.');
+  if([...jobs.values()].filter(j=>j.status!=='done'&&j.status!=='error').length>=5)throw httpError(503,'The server is busy. Try again in a few minutes.');
+  const body=await readBody(req,MAX_UPLOAD);
+  if(!body.length)throw httpError(400,'No audio was sent.');
+  const id=Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+  const file=path.join(os.tmpdir(),'ccb-'+id+'.audio');
+  await fs.promises.writeFile(file,body);
+  const job={status:'queued',step:'',result:{},notes:[],created:Date.now()};
+  jobs.set(id,job);
+  queue=queue.then(async()=>{
+    job.status='running';
+    for(const name of ['chords','transcribe']){
+      if(name==='chords'&&!want.chords||name==='transcribe'&&!want.lyrics)continue;
+      job.step=name==='chords'?'chords':'lyrics';
+      try{Object.assign(job.result,await runScript(name,file));}
+      catch(e){job.notes.push(e.message);}
+    }
+    job.status='done';job.step='';
+  }).finally(()=>fs.promises.unlink(file).catch(()=>{}));
+  return {id};
 }
+function jobStatus(id){
+  const job=jobs.get(id);
+  if(!job)throw httpError(404,'That job has expired. Analyze the song again.');
+  const ahead=job.status==='queued'?[...jobs.values()].filter(j=>j.status!=='done'&&j.status!=='error'&&j.created<job.created).length:0;
+  return {status:job.status,step:job.step,ahead,result:job.status==='done'?job.result:null,notes:job.notes};
+}
+setInterval(()=>{const now=Date.now();for(const [id,j] of jobs)if(now-j.created>30*60000)jobs.delete(id);},60000).unref();
+
 let caps=null;
 function which(cmd,args){
   return new Promise(r=>{const p=spawn(cmd,args,{stdio:'ignore'});p.on('error',()=>r(false));p.on('close',c=>r(c===0));});
@@ -221,9 +244,10 @@ function which(cmd,args){
 async function capabilities(){
   if(!caps)caps=Promise.all([
     which(YTDLP,['--version']),
-    TRANSCRIBE_CMD?Promise.resolve(true):which(PYTHON,['-c','import faster_whisper']),
+    process.env.TRANSCRIBE_CMD?Promise.resolve(true):which(PYTHON,['-c','import faster_whisper']),
+    process.env.CHORDS_CMD?Promise.resolve(true):which(PYTHON,['-c','import madmom']),
     ffmpegReady()
-  ]).then(([links,lyrics,mp3])=>({ok:true,links,lyrics,mp3}));
+  ]).then(([links,lyrics,chords,mp3])=>({ok:true,links,lyrics,chords,mp3}));
   return caps;
 }
 
@@ -259,12 +283,13 @@ const server=http.createServer(async(req,res)=>{
   if(req.method==='OPTIONS'){res.writeHead(204);return res.end();}
   if(!u.pathname.startsWith('/api/'))return serveStatic(u.pathname,res);
   if(u.pathname==='/api/health')return sendJson(res,200,await capabilities());
+  if(u.pathname==='/api/job'){try{return sendJson(res,200,jobStatus(u.searchParams.get('id')||''));}catch(e){return sendJson(res,e.status||500,{error:e.message});}}
   const ip=(req.headers['x-forwarded-for']||req.socket.remoteAddress||'').split(',')[0].trim();
   if(limited(ip))return sendJson(res,429,{error:'Too many requests. Try again in a few minutes.'});
   try{
     if(u.pathname==='/api/resolve')return sendJson(res,200,await resolveLink((u.searchParams.get('url')||'').trim()));
     if(u.pathname==='/api/audio')return await streamAudio(u.searchParams.get('id')||'',res);
-    if(u.pathname==='/api/transcribe'&&req.method==='POST')return sendJson(res,200,await transcribe(req));
+    if(u.pathname==='/api/analyze'&&req.method==='POST')return sendJson(res,200,await startJob(req,u));
     sendJson(res,404,{error:'Not found'});
   }catch(e){
     if(!res.headersSent)sendJson(res,e.status||500,{error:e.status?e.message:'Something went wrong on the server.'});
