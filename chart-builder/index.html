@@ -80,7 +80,9 @@
   .cb-tool-spacer{flex:1;}
   .cb-edit-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start;}
   .cb-preview-wrap{position:sticky;top:84px;background:var(--surface);border:1px solid var(--border);padding:12px;}
-  .cb-preview{width:100%;height:calc(100vh - 120px);min-height:520px;border:none;background:#fff;display:block;}
+  .cb-preview{width:100%;height:calc(100vh - 120px);min-height:520px;overflow-y:auto;background:#2a2a2a;display:flex;flex-direction:column;gap:12px;padding:12px;}
+  .cb-preview canvas{width:100%;height:auto;background:#fff;display:block;box-shadow:0 1px 6px rgba(0,0,0,.4);}
+  .cb-preview iframe{width:100%;flex:1;border:none;background:#fff;}
   .cb-sec{background:var(--surface);border:1px solid var(--border);padding:14px 16px;margin-bottom:10px;}
   .cb-sec-head{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;}
   .cb-sec-head .cb-input{flex:1;min-width:120px;font-family:'Oswald',sans-serif;letter-spacing:1.5px;text-transform:uppercase;font-size:13px;}
@@ -244,13 +246,16 @@
         </div>
       </div>
       <div class="cb-preview-wrap">
-        <iframe class="cb-preview" id="cb-preview" title="Chart preview"></iframe>
+        <div class="cb-preview" id="cb-preview" aria-label="Chart preview"></div>
       </div>
     </div>
   </div>
 </main>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<!-- pdf.js draws the live preview; its worker script runs on the page so no separate worker file is needed -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
 <script src="js/theory.js"></script>
 <script src="js/analysis.js"></script>
 <script src="js/build.js"></script>

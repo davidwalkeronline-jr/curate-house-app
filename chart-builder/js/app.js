@@ -161,16 +161,41 @@
     $('cb-sections').innerHTML=html;
   }
   function changed(){save();preview();}
+  var renderSeq=0;
+  async function showPdf(doc){
+    var box=$('cb-preview'),seq=++renderSeq;
+    if(!window.pdfjsLib){
+      var url=URL.createObjectURL(doc.output('blob')),fr=box.querySelector('iframe');
+      if(!fr){fr=document.createElement('iframe');fr.title='Chart preview';box.replaceChildren(fr);}
+      fr.src=url+'#toolbar=0&navpanes=0&view=FitH';
+      if(previewUrl)setTimeout(function(u){URL.revokeObjectURL(u);}.bind(null,previewUrl),4000);
+      previewUrl=url;return;
+    }
+    var pdf=await pdfjsLib.getDocument({data:new Uint8Array(doc.output('arraybuffer'))}).promise,pages=[];
+    var w=Math.max(300,box.clientWidth-24),dpr=Math.min(2,window.devicePixelRatio||1);
+    for(var i=1;i<=pdf.numPages;i++){
+      var page=await pdf.getPage(i),vp=page.getViewport({scale:w/page.getViewport({scale:1}).width*dpr});
+      var c=document.createElement('canvas');c.width=Math.round(vp.width);c.height=Math.round(vp.height);
+      await page.render({canvasContext:c.getContext('2d'),viewport:vp}).promise;
+      if(seq!==renderSeq){pdf.destroy();return;}
+      pages.push(c);
+    }
+    pdf.destroy();
+    box.replaceChildren.apply(box,pages);
+  }
   function preview(now){
     clearTimeout(previewTimer);
     previewTimer=setTimeout(async function(){
-      try{
-        var doc=CBP.render(chart,await CBP.loadFonts()),url=URL.createObjectURL(doc.output('blob'));
-        $('cb-preview').src=url+'#toolbar=0&navpanes=0&view=FitH';
-        if(previewUrl)setTimeout(function(u){URL.revokeObjectURL(u);}.bind(null,previewUrl),4000);
-        previewUrl=url;
-      }catch(e){console.error(e);}
+      try{showPdf(CBP.render(chart,await CBP.loadFonts())).catch(function(e){console.error(e);});}
+      catch(e){console.error(e);}
     },now?50:500);
+  }
+  // Inside a Claude artifact, files are offered through the viewer's save dialog.
+  async function savePdf(doc,name){
+    var dl=window.claude&&window.claude.use?await window.claude.use('downloads'):null;
+    if(!dl)return doc.save(name);
+    try{await dl.save({filename:name,data:doc.output('blob')});}
+    catch(e){if(e&&e.code!=='declined')$('cb-download').textContent='Download unavailable here';}
   }
   function slug(s){return (s||'chart').replace(/[^a-z0-9]+/gi,'-').replace(/^-|-$/g,'')||'chart';}
   function transpose(semis){
@@ -212,8 +237,8 @@
       $('cb-progress').style.display='none';$('cb-resume').style.display=load()?'':'none';
     });
     $('cb-download').addEventListener('click',async function(){
-      try{CBP.render(chart,await CBP.loadFonts()).save(slug(chart.title)+'-'+slug(chart.key)+'.pdf');}
-      catch(e){alert(e.message);}
+      try{await savePdf(CBP.render(chart,await CBP.loadFonts()),slug(chart.title)+'-'+slug(chart.key)+'.pdf');}
+      catch(e){$('cb-download').textContent='Download failed';console.error(e);}
     });
     var meta={'cb-title':'title','cb-artist':'artist','cb-tempo':'tempo','cb-time':'time','cb-roadmap':'roadmap','cb-notes':'notes','cb-key':'key'};
     Object.keys(meta).forEach(function(id){
@@ -259,7 +284,11 @@
       if(a==='up'&&i>0){L.splice(i-1,0,L.splice(i,1)[0]);}
       else if(a==='down'&&i<L.length-1){L.splice(i+1,0,L.splice(i,1)[0]);}
       else if(a==='dup'){L.splice(i+1,0,JSON.parse(JSON.stringify(s)));}
-      else if(a==='del'){if(!confirm('Delete '+(s.name||'this section')+'?'))return;L.splice(i,1);}
+      else if(a==='del'){
+        // second click confirms
+        if(!act.classList.contains('arm')){act.classList.add('arm');act.textContent='Delete?';act.style.width='auto';setTimeout(function(){act.classList.remove('arm');act.innerHTML='&times;';act.style.width='';},3000);return;}
+        L.splice(i,1);
+      }
       else return;
       renderSections();changed();
     });
