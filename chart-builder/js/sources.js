@@ -1,16 +1,18 @@
-// =================== SOURCES: YOUTUBE / SPOTIFY LINKS AND LYRICS LOOKUP ===================
-// Browsers cannot pull audio out of YouTube or Spotify directly, so links go through the small
-// audio service in server/ (yt-dlp). Spotify links are matched to the same song on YouTube.
+// =================== SOURCES: LINKS, LYRICS LOOKUP, LYRICS TRANSCRIPTION ===================
+// Browsers cannot pull audio out of YouTube or Spotify, so links go through the builder's server
+// (server/, yt-dlp). Spotify links are matched to the same song on YouTube. The server also
+// transcribes sung lyrics with word timings.
 var CBS=(function(){
-  var STORE='cb-audio-service';
+  function service(){return ((window.CB_CONFIG&&window.CB_CONFIG.audioService)||'').replace(/\/+$/,'');}
 
-  function service(){
-    var v='';
-    try{v=localStorage.getItem(STORE)||'';}catch(e){}
-    if(!v&&window.CB_CONFIG)v=window.CB_CONFIG.audioService||'';
-    return v.replace(/\/+$/,'');
+  // What the server can do: {links, lyrics}. Both false when the page runs without it.
+  var healthP=null;
+  function health(){
+    if(!healthP)healthP=(location.protocol==='file:'&&!service()?Promise.resolve(null):
+      fetch(service()+'/api/health').then(function(r){return r.ok?r.json():null;}).catch(function(){return null;}))
+      .then(function(h){return {links:!!(h&&h.links),lyrics:!!(h&&h.lyrics)};});
+    return healthP;
   }
-  function setService(v){try{localStorage.setItem(STORE,(v||'').trim());}catch(e){}}
 
   function kind(url){
     url=(url||'').trim();
@@ -19,16 +21,16 @@ var CBS=(function(){
     return null;
   }
 
-  async function api(path){
+  async function api(path,init){
     var base=service();
-    if(!base&&location.protocol==='file:')throw new Error('Link import needs the audio service. Add its address under Settings.');
+    if(!base&&location.protocol==='file:')throw new Error('Song links work when the builder runs on its own website. Upload the audio file instead.');
     var res;
-    try{res=await fetch(base+path);}
-    catch(e){throw new Error('Could not reach the audio service'+(base?' at '+base:'')+'. Check the address under Settings.');}
+    try{res=await fetch(base+path,init);}
+    catch(e){throw new Error('Could not reach the builder\'s server. Check your connection and try again.');}
     if(!res.ok){
       var msg='';try{msg=(await res.json()).error;}catch(e){}
-      if(res.status===404&&!msg)msg='No audio service found at this address. Add its address under Settings.';
-      throw new Error(msg||('Audio service error '+res.status));
+      if(res.status===404&&!msg)msg='Song links work when the builder runs on its own website. Upload the audio file instead.';
+      throw new Error(msg||('Server error '+res.status));
     }
     return res;
   }
@@ -97,5 +99,20 @@ var CBS=(function(){
     return words;
   }
 
-  return {service:service,setService:setService,kind:kind,resolve:resolve,fetchAudio:fetchAudio,lyrics:lyrics,syncedWords:syncedWords};
+  // ---------- lyrics transcription on the server ----------
+  function wav16(pcm,rate){
+    var n=pcm.length,buf=new ArrayBuffer(44+n*2),v=new DataView(buf);
+    function str(o,t){for(var i=0;i<t.length;i++)v.setUint8(o+i,t.charCodeAt(i));}
+    str(0,'RIFF');v.setUint32(4,36+n*2,true);str(8,'WAVE');str(12,'fmt ');
+    v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);v.setUint32(24,rate,true);
+    v.setUint32(28,rate*2,true);v.setUint16(32,2,true);v.setUint16(34,16,true);str(36,'data');v.setUint32(40,n*2,true);
+    for(var i=0;i<n;i++){var x=Math.max(-1,Math.min(1,pcm[i]));v.setInt16(44+i*2,x<0?x*0x8000:x*0x7FFF,true);}
+    return new Blob([buf],{type:'audio/wav'});
+  }
+  async function transcribe(pcm16){
+    var res=await api('/api/transcribe',{method:'POST',headers:{'Content-Type':'audio/wav'},body:wav16(pcm16,16000)});
+    return ((await res.json()).words||[]).filter(function(w){return w&&w.text;});
+  }
+
+  return {service:service,health:health,kind:kind,resolve:resolve,fetchAudio:fetchAudio,lyrics:lyrics,syncedWords:syncedWords,transcribe:transcribe};
 })();

@@ -1,11 +1,12 @@
-// Chord Chart Builder audio service.
-// Turns a YouTube or Spotify link into audio the browser can analyze, using yt-dlp.
-// Spotify does not expose audio, so a Spotify track is matched to the same song on YouTube.
-// It also serves the chart builder page itself, so one deployment runs the whole app.
+// Chord Chart Builder server.
+// Serves the builder page, turns YouTube or Spotify links into audio the browser can analyze
+// (yt-dlp; Spotify tracks are matched to the same song on YouTube), and transcribes sung
+// lyrics with word timings (faster-whisper via transcribe.py).
 'use strict';
 const http=require('http');
 const {spawn}=require('child_process');
 const fs=require('fs');
+const os=require('os');
 const path=require('path');
 
 const PORT=+process.env.PORT||8787;
@@ -16,6 +17,10 @@ const ORIGINS=(process.env.ALLOWED_ORIGINS||'*').split(',').map(s=>s.trim()).fil
 const STATIC_DIR=path.join(__dirname,'..');
 const MAX_DOWNLOADS=+process.env.MAX_DOWNLOADS||3;
 const RATE_LIMIT=+process.env.RATE_LIMIT||30; // API requests per IP per 10 minutes
+const PYTHON=process.env.PYTHON_PATH||'python3';
+const TRANSCRIBE_CMD=process.env.TRANSCRIBE_CMD||''; // override for testing: a command taking the audio path
+const MAX_TRANSCRIBES=+process.env.MAX_TRANSCRIBES||1;
+const MAX_UPLOAD=(+process.env.MAX_UPLOAD_MB||40)*1048576;
 
 const TYPES={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8',
   '.ttf':'font/ttf','.png':'image/png','.svg':'image/svg+xml','.ico':'image/x-icon','.json':'application/json'};
@@ -61,7 +66,7 @@ function runJson(target){
     const p=spawn(YTDLP,ytdlpArgs(['--dump-single-json','--skip-download',target]));
     let out='',err='';
     p.stdout.on('data',d=>out+=d);p.stderr.on('data',d=>err+=d);
-    p.on('error',()=>reject(httpError(500,'yt-dlp is not installed on the audio service.')));
+    p.on('error',()=>reject(httpError(500,'yt-dlp is not installed on this server.')));
     p.on('close',code=>{
       if(code!==0)return reject(httpError(502,'YouTube lookup failed: '+(err.split('\n').filter(Boolean).pop()||'unknown error')));
       try{resolve(JSON.parse(out));}catch(e){reject(httpError(502,'Unexpected response from yt-dlp.'));}
@@ -99,7 +104,7 @@ async function resolveLink(url){
 let active=0;
 function streamAudio(id,res){
   if(!/^[A-Za-z0-9_-]{11}$/.test(id))throw httpError(400,'Invalid video id.');
-  if(active>=MAX_DOWNLOADS)throw httpError(503,'The audio service is busy. Try again in a minute.');
+  if(active>=MAX_DOWNLOADS)throw httpError(503,'The server is busy. Try again in a minute.');
   active++;
   const p=spawn(YTDLP,ytdlpArgs(['-f','bestaudio[ext=m4a]/bestaudio','--match-filter','duration<='+MAX_SECONDS,'-o','-','https://www.youtube.com/watch?v='+id]));
   let started=false,err='';
@@ -116,8 +121,58 @@ function streamAudio(id,res){
     done();
     if(!started)sendJson(res,502,{error:'Could not download that audio: '+(err.split('\n').filter(Boolean).pop()||'exit '+code)});
   });
-  p.on('error',()=>{done();if(!started)sendJson(res,500,{error:'yt-dlp is not installed on the audio service.'});});
+  p.on('error',()=>{done();if(!started)sendJson(res,500,{error:'yt-dlp is not installed on this server.'});});
   res.on('close',()=>{if(p.exitCode===null)p.kill('SIGKILL');});
+}
+
+// ---------- lyrics ----------
+function transcribeCommand(file){
+  if(TRANSCRIBE_CMD)return [TRANSCRIBE_CMD,[file]];
+  return [PYTHON,[path.join(__dirname,'transcribe.py'),file]];
+}
+let transcribing=0;
+function readBody(req,limit){
+  return new Promise((resolve,reject)=>{
+    const chunks=[];let size=0;
+    req.on('data',c=>{size+=c.length;if(size>limit){reject(httpError(413,'That audio is too large to transcribe.'));req.destroy();return;}chunks.push(c);});
+    req.on('end',()=>resolve(Buffer.concat(chunks)));
+    req.on('error',reject);
+  });
+}
+async function transcribe(req){
+  if(transcribing>=MAX_TRANSCRIBES)throw httpError(503,'The lyrics transcriber is busy. Try again in a minute.');
+  transcribing++;
+  const file=path.join(os.tmpdir(),'ccb-'+process.pid+'-'+Date.now()+'-'+Math.random().toString(36).slice(2)+'.audio');
+  try{
+    const body=await readBody(req,MAX_UPLOAD);
+    if(!body.length)throw httpError(400,'No audio was sent.');
+    await fs.promises.writeFile(file,body);
+    const [cmd,args]=transcribeCommand(file);
+    return await new Promise((resolve,reject)=>{
+      const p=spawn(cmd,args);
+      let out='',err='';
+      p.stdout.on('data',d=>out+=d);p.stderr.on('data',d=>err+=d);
+      p.on('error',()=>reject(httpError(501,'Lyrics transcription is not installed on this server.')));
+      p.on('close',code=>{
+        if(code!==0){console.error(err);return reject(httpError(502,'Lyrics transcription failed.'));}
+        try{resolve(JSON.parse(out));}catch(e){reject(httpError(502,'Unexpected response from the transcriber.'));}
+      });
+    });
+  }finally{
+    transcribing--;
+    fs.promises.unlink(file).catch(()=>{});
+  }
+}
+let caps=null;
+function which(cmd,args){
+  return new Promise(r=>{const p=spawn(cmd,args,{stdio:'ignore'});p.on('error',()=>r(false));p.on('close',c=>r(c===0));});
+}
+async function capabilities(){
+  if(!caps)caps=Promise.all([
+    which(YTDLP,['--version']),
+    TRANSCRIBE_CMD?Promise.resolve(true):which(PYTHON,['-c','import faster_whisper'])
+  ]).then(([links,lyrics])=>({ok:true,links,lyrics}));
+  return caps;
 }
 
 const hits=new Map();
@@ -127,6 +182,8 @@ function limited(ip){
   return list.length>RATE_LIMIT;
 }
 function cors(req,res){
+  res.setHeader('Access-Control-Allow-Headers','Content-Type');
+  res.setHeader('Access-Control-Allow-Methods','GET, POST, OPTIONS');
   const origin=req.headers.origin;
   if(ORIGINS.includes('*'))res.setHeader('Access-Control-Allow-Origin','*');
   else if(origin&&ORIGINS.includes(origin)){res.setHeader('Access-Control-Allow-Origin',origin);res.setHeader('Vary','Origin');}
@@ -149,15 +206,16 @@ const server=http.createServer(async(req,res)=>{
   cors(req,res);
   if(req.method==='OPTIONS'){res.writeHead(204);return res.end();}
   if(!u.pathname.startsWith('/api/'))return serveStatic(u.pathname,res);
-  if(u.pathname==='/api/health')return sendJson(res,200,{ok:true});
+  if(u.pathname==='/api/health')return sendJson(res,200,await capabilities());
   const ip=(req.headers['x-forwarded-for']||req.socket.remoteAddress||'').split(',')[0].trim();
   if(limited(ip))return sendJson(res,429,{error:'Too many requests. Try again in a few minutes.'});
   try{
     if(u.pathname==='/api/resolve')return sendJson(res,200,await resolveLink((u.searchParams.get('url')||'').trim()));
     if(u.pathname==='/api/audio')return streamAudio(u.searchParams.get('id')||'',res);
+    if(u.pathname==='/api/transcribe'&&req.method==='POST')return sendJson(res,200,await transcribe(req));
     sendJson(res,404,{error:'Not found'});
   }catch(e){
-    if(!res.headersSent)sendJson(res,e.status||500,{error:e.status?e.message:'Something went wrong on the audio service.'});
+    if(!res.headersSent)sendJson(res,e.status||500,{error:e.status?e.message:'Something went wrong on the server.'});
     if(!e.status)console.error(e);
   }
 });

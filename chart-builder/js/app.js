@@ -62,8 +62,8 @@
   async function analyzeFile(){
     var btn=$('cb-analyze');btn.disabled=true;$('cb-blank').disabled=true;
     $('cb-progress').style.display='block';
-    var lyrics=$('cb-lyrics').value.trim(),lookup=!lyrics&&$('cb-lookup').checked,listen=!lyrics&&$('cb-transcribe').checked;
-    stepState={lyrics:lookup||listen?'':'skip',fetch:source==='file'?'skip':''};
+    var lyrics=$('cb-lyrics').value.trim(),auto=!lyrics&&$('cb-autolyrics').checked;
+    stepState={lyrics:auto?'':'skip',fetch:source==='file'?'skip':''};
     var t0=Date.now();
     try{
       var got=await getAudio();
@@ -71,26 +71,32 @@
       var buf=await CBA.decode(got.buf);
       var A=await CBA.analyze(buf,{time:$('cb-in-time').value},report);
       var title=$('cb-in-title').value.trim(),artist=$('cb-in-artist').value.trim(),words=null,note='';
-      if(lookup&&title){
+      // Lyrics: pasted, then timed lyrics found online, then transcribed from the vocals.
+      if(auto&&title){
         report('lyrics',0.05,'Looking up lyrics');
         var found=await CBS.lyrics(title,artist,buf.duration);
         if(found&&found.words&&found.words.length){words=found.words;note='Timed lyrics found on '+found.source;}
         else if(found&&found.plain){lyrics=found.plain;note='Lyrics found on '+found.source;}
       }
-      if(!words&&!lyrics&&listen){
+      if(!words&&!lyrics&&auto){
+        var tick=setInterval(function(){
+          var s=$('cb-status');
+          if(/^Listening for lyrics/.test(s.textContent))s.textContent='Listening for lyrics. Longer songs can take a few minutes. ('+Math.round((Date.now()-t0)/1000)+'s)';
+        },1000);
         try{
-          report('lyrics',0.08,'Loading the speech model');
           var pcm=await CBA.resample(buf,16000);
-          var tick=setInterval(function(){
-            var s=$('cb-status');
-            if(/^Listening for lyrics/.test(s.textContent))s.textContent='Listening for lyrics. Longer songs can take a few minutes. ('+Math.round((Date.now()-t0)/1000)+'s)';
-          },1000);
-          try{words=await CBB.transcribe(pcm,report);}finally{clearInterval(tick);}
-          note=words.length?words.length+' words heard':'No clear vocals heard';
+          if((await CBS.health()).lyrics){
+            report('lyrics',0.3,'Listening for lyrics. Longer songs can take a few minutes.');
+            words=await CBS.transcribe(pcm);
+          } else {
+            report('lyrics',0.08,'Loading the speech model');
+            words=await CBB.transcribe(pcm,report);
+          }
+          note=words.length?'Lyrics transcribed from the vocals ('+words.length+' words). Check them before rehearsal.':'No clear vocals heard';
         }catch(e){
           console.warn('Lyric transcription failed',e);
-          note='Lyric transcription was unavailable, so the chart has chords only. Paste lyrics to add them.';
-        }
+          note='Lyrics could not be transcribed here, so the chart has chords only. Paste the lyrics to add them.';
+        }finally{clearInterval(tick);}
       }
       if(stepState.lyrics!=='skip')report('lyrics',1,note||'No lyrics found. Paste them to add them.');
       report('chart',0.5,'Building the chart');
@@ -221,8 +227,6 @@
         k==='youtube'?'YouTube link ready.':k==='spotify'?'Spotify track ready. The builder will find the same song on YouTube to listen to.':'That does not look like a YouTube video or Spotify track link.';
       ready();
     });
-    $('cb-service').value=CBS.service();
-    $('cb-service').addEventListener('change',function(){CBS.setService(this.value);});
     var drop=$('cb-drop');
     $('cb-file').addEventListener('change',function(e){setFile(e.target.files[0]);});
     ['dragenter','dragover'].forEach(function(ev){drop.addEventListener(ev,function(e){e.preventDefault();drop.classList.add('drag');});});
