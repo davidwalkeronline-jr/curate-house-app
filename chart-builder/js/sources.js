@@ -113,7 +113,9 @@ var CBS=(function(){
   async function analyzeAudio(pcm,rate,want,onStatus){
     var q='?lyrics='+(want.lyrics?1:0);
     var job=await (await api('/api/analyze'+q,{method:'POST',headers:{'Content-Type':'audio/wav'},body:wav16(pcm,rate)})).json();
+    var deadline=Date.now()+(want.maxMs||8*60000);
     for(;;){
+      if(Date.now()>deadline)throw new Error('The server took too long to write out the lyrics.');
       await new Promise(function(r){setTimeout(r,2500);});
       var st=await (await api('/api/job?id='+encodeURIComponent(job.id))).json();
       if(st.notes&&st.notes.length)console.warn('Server notes',st.notes);

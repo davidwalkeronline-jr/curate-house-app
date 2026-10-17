@@ -108,7 +108,7 @@
           try{
             if((await CBS.health()).lyrics){
               report('lyrics',0.3,'This browser could not run the speech model, so the server is writing out the lyrics');
-              var r=await CBS.analyzeAudio(await CBA.resample(buf,22050),22050,{chords:false,lyrics:true},function(){});
+              var r=await CBS.analyzeAudio(await CBA.resample(buf,22050),22050,{lyrics:true,maxMs:8*60000},function(){});
               words=r.words||[];
             }
           }catch(e2){console.warn('Server lyric transcription failed',e2);}
