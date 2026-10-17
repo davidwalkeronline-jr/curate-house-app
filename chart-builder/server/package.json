@@ -1,0 +1,13 @@
+{
+  "name": "chord-chart-builder-service",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Serves the Chord Chart Builder and turns YouTube or Spotify links into audio for it (requires yt-dlp).",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
