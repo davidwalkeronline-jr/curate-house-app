@@ -53,9 +53,17 @@
     if(!$('cb-in-title').value&&info.title)$('cb-in-title').value=info.title;
     if(!$('cb-in-artist').value&&info.artist)$('cb-in-artist').value=info.artist;
     report('fetch',0.15,'Downloading audio'+(info.title?' for '+info.title:''));
-    var buf=await CBS.fetchAudio(info.id,function(frac,bytes){
-      report('fetch',0.15+0.85*frac,'Downloading audio '+(frac?Math.round(frac*100)+'%':(bytes/1048576).toFixed(1)+' MB'));
-    });
+    // YouTube sometimes refuses one upload of a song; try the other matches before giving up.
+    var ids=[info.id].concat(info.alternates||[]),buf=null,lastErr=null;
+    for(var i=0;i<ids.length&&!buf;i++){
+      try{
+        buf=await CBS.fetchAudio(ids[i],function(frac,bytes){
+          report('fetch',0.15+0.85*frac,'Downloading audio '+(frac?Math.round(frac*100)+'%':(bytes/1048576).toFixed(1)+' MB'));
+        });
+      }catch(e){lastErr=e;console.warn('Download failed for',ids[i],e);if(i+1<ids.length)report('fetch',0.15,'Trying another copy of the song');}
+    }
+    if(!buf)throw new Error(/not a bot|Sign in/i.test(lastErr&&lastErr.message||'')?
+      'YouTube blocked the download of this song. Try a different link for it, or upload the audio file.':(lastErr&&lastErr.message)||'Could not download that audio.');
     report('fetch',1);
     return {buf:buf,info:info};
   }

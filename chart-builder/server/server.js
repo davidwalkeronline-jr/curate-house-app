@@ -86,13 +86,16 @@ async function spotifyMeta(url){
 }
 // Of a few YouTube search results, take the one closest in length to the Spotify track,
 // skipping live, cover, karaoke and instrumental versions unless the track itself is one.
-function pickMatch(entries,meta){
+// Returns the candidates best first; the page falls back to the next one if YouTube refuses a download.
+function rankMatches(entries,meta){
   const avoid=/\b(live|cover|karaoke|instrumental|lyric video|reaction|tutorial|sped up|slowed|remix)\b/i;
   const ok=entries.filter(e=>e&&e.id&&(!avoid.test(e.title||'')||avoid.test(meta.title)));
   const pool=ok.length?ok:entries.filter(e=>e&&e.id);
-  if(!meta.duration)return pool[0];
-  return pool.slice().sort((a,b)=>Math.abs((a.duration||1e9)-meta.duration)-Math.abs((b.duration||1e9)-meta.duration))[0];
+  if(!meta.duration)return pool;
+  const close=pool.filter(e=>e.duration&&Math.abs(e.duration-meta.duration)<=15);
+  return (close.length?close:pool).slice().sort((a,b)=>Math.abs((a.duration||1e9)-meta.duration)-Math.abs((b.duration||1e9)-meta.duration));
 }
+function pickMatch(entries,meta){return rankMatches(entries,meta)[0];}
 
 function httpError(status,message){const e=new Error(message);e.status=status;return e;}
 function ytdlpArgs(extra){return (COOKIES?['--cookies',COOKIES]:[]).concat(['--no-playlist','--no-warnings'],extra);}
@@ -117,8 +120,11 @@ async function resolveLink(url){
     meta=await spotifyMeta(url);
     target='ytsearch5:'+(meta.artist?meta.artist+' ':'')+meta.title+' audio';
   }
-  let info=await runJson(target,meta?['--flat-playlist']:[]);
-  if(info&&info.entries)info=meta?pickMatch(info.entries,meta):info.entries[0];
+  let info=await runJson(target,meta?['--flat-playlist']:[]),alternates=[];
+  if(info&&info.entries){
+    const ranked=meta?rankMatches(info.entries,meta):info.entries;
+    info=ranked[0];alternates=ranked.slice(1,4).map(e=>e.id);
+  }
   if(!info||!info.id)throw httpError(404,'No matching video was found.');
   if(info.duration&&info.duration>MAX_SECONDS)throw httpError(413,'That video is longer than '+Math.round(MAX_SECONDS/60)+' minutes.');
   if(!meta){
@@ -130,7 +136,7 @@ async function resolveLink(url){
     meta={title:title,artist:artist||(info.uploader||info.channel||'').replace(/\s*-\s*Topic$/,'')};
   }
   return {
-    source:k,id:info.id,duration:info.duration||null,
+    source:k,id:info.id,alternates,duration:info.duration||null,
     title:meta.title,artist:meta.artist,
     matched:info.title||'',url:'https://www.youtube.com/watch?v='+info.id
   };
@@ -311,4 +317,4 @@ const server=http.createServer(async(req,res)=>{
 });
 
 if(require.main===module)server.listen(PORT,()=>console.log('Chord Chart Builder running on http://localhost:'+PORT));
-module.exports={kind,parseSpotifyPage,parseSpotifyEmbed,pickMatch,server};
+module.exports={kind,parseSpotifyPage,parseSpotifyEmbed,pickMatch,rankMatches,server};
