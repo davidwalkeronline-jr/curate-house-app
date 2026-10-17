@@ -141,41 +141,54 @@ function ffmpegReady(){
   if(hasFfmpeg===null)hasFfmpeg=new Promise(r=>{const p=spawn(FFMPEG,['-version'],{stdio:'ignore'});p.on('error',()=>r(false));p.on('close',c=>r(c===0));});
   return hasFfmpeg;
 }
-// YouTube audio arrives as fragmented MP4 or WebM, which not every browser can decode,
-// so it is converted to MP3 on the way through when ffmpeg is available.
+// YouTube audio arrives as MP4 or WebM, which not every browser can decode, so it is converted
+// to MP3 when ffmpeg is available. It is downloaded to a temporary file first because some MP4
+// files keep their index at the end and cannot be converted while streaming.
 async function streamAudio(id,res){
   if(!/^[A-Za-z0-9_-]{11}$/.test(id))throw httpError(400,'Invalid video id.');
   if(active>=MAX_DOWNLOADS)throw httpError(503,'The server is busy. Try again in a minute.');
   active++;
-  const convert=await ffmpegReady();
-  const dl=spawn(YTDLP,ytdlpArgs(['-f','bestaudio[ext=m4a]/bestaudio','--match-filter','duration<='+MAX_SECONDS,'-o','-','https://www.youtube.com/watch?v='+id]));
-  let out=dl.stdout,conv=null;
-  if(convert){
-    conv=spawn(FFMPEG,['-hide_banner','-loglevel','error','-i','pipe:0','-vn','-ac','2','-ar','44100','-b:a','160k','-f','mp3','pipe:1']);
-    dl.stdout.pipe(conv.stdin);
-    conv.stdin.on('error',()=>{});
-    out=conv.stdout;
+  const tmp=path.join(os.tmpdir(),'ccb-dl-'+id+'-'+Date.now()+'.audio');
+  const procs=[];
+  let closed=false;
+  res.on('close',()=>{closed=true;procs.forEach(p=>{if(p.exitCode===null)p.kill('SIGKILL');});});
+  function run(cmd,args){
+    return new Promise((resolve,reject)=>{
+      const p=spawn(cmd,args);procs.push(p);
+      let err='';p.stderr.on('data',d=>err+=d);
+      p.on('error',()=>reject(new Error(cmd+' is not installed on this server.')));
+      p.on('close',code=>code===0?resolve():reject(new Error(err.split('\n').filter(Boolean).pop()||cmd+' exited '+code)));
+    });
   }
-  let started=false,err='',finished=false;
-  const done=()=>{if(!finished){finished=true;active=Math.max(0,active-1);}};
-  dl.stderr.on('data',d=>err+=d);
-  if(conv)conv.stderr.on('data',d=>err+=d);
-  // headers wait for the first audio bytes so a failed download can still answer with an error
-  out.once('data',chunk=>{
-    started=true;
-    res.writeHead(200,{'Content-Type':convert?'audio/mpeg':'audio/mp4','Cache-Control':'no-store'});
-    res.write(chunk);
-    out.pipe(res);
-  });
-  (conv||dl).on('close',code=>{
-    done();
-    if(!started)sendJson(res,502,{error:'Could not download that audio: '+(err.split('\n').filter(Boolean).pop()||'exit '+code)});
-  });
-  dl.on('error',()=>{done();if(!started)sendJson(res,500,{error:'yt-dlp is not installed on this server.'});});
-  res.on('close',()=>{[dl,conv].forEach(p=>{if(p&&p.exitCode===null)p.kill('SIGKILL');});});
+  try{
+    const convert=await ffmpegReady();
+    await run(YTDLP,ytdlpArgs(['-f','bestaudio[ext=m4a]/bestaudio','--match-filter','duration<='+MAX_SECONDS,'--no-part','-o',tmp,'https://www.youtube.com/watch?v='+id]));
+    if(closed)return;
+    if(!convert){
+      res.writeHead(200,{'Content-Type':'audio/mp4','Cache-Control':'no-store'});
+      return await new Promise(r=>{const st=fs.createReadStream(tmp);st.pipe(res);st.on('close',r);});
+    }
+    const conv=spawn(FFMPEG,['-hide_banner','-loglevel','error','-i',tmp,'-vn','-ac','2','-ar','44100','-b:a','160k','-f','mp3','pipe:1']);
+    procs.push(conv);
+    let started=false,err='';
+    conv.stderr.on('data',d=>err+=d);
+    conv.stdout.once('data',chunk=>{
+      started=true;
+      res.writeHead(200,{'Content-Type':'audio/mpeg','Cache-Control':'no-store'});
+      res.write(chunk);conv.stdout.pipe(res);
+    });
+    await new Promise(r=>conv.on('close',code=>{
+      if(!started&&!closed)sendJson(res,502,{error:'Could not convert that audio: '+(err.split('\n').filter(Boolean).pop()||'exit '+code)});
+      r();
+    }));
+  }catch(e){
+    if(!res.headersSent&&!closed)sendJson(res,502,{error:'Could not download that audio: '+e.message});
+  }finally{
+    active=Math.max(0,active-1);
+    fs.promises.unlink(tmp).catch(()=>{});
+  }
 }
 
-// ---------- lyrics ----------
 // Chords (madmom) and lyrics (faster-whisper) run as background jobs: one upload, then the
 // page polls /api/job, so slow songs are not cut off by proxy timeouts.
 function scriptCommand(name,file){
