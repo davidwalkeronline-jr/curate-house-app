@@ -47,7 +47,7 @@ The speech model downloads the first time someone transcribes a song.
 
 ### Static hosting only
 
-Any static host (Netlify, GitHub Pages) can serve this folder, but then links do not work and lyrics fall back to the slower in-browser model. To pair a static page with a server hosted elsewhere, set `window.CB_CONFIG.audioService` in `index.html` to the server's address and set `ALLOWED_ORIGINS` on the server.
+Any static host (Netlify, GitHub Pages) can serve this folder. `window.CB_CONFIG.audioService` in `index.html` points the page at the server for links and lyrics; it is set to the Render deployment, https://curate-house-charts.onrender.com. If the server is unreachable, links do not work and lyrics fall back to the slower in-browser model.
 
 ### Server settings
 
@@ -62,6 +62,7 @@ Any static host (Netlify, GitHub Pages) can serve this folder, but then links do
 | `MAX_DOWNLOADS` | `3` | Link downloads allowed at the same time |
 | `RATE_LIMIT` | `30` | API requests per visitor per 10 minutes |
 | `YTDLP_PATH` | `yt-dlp` | Path to the yt-dlp binary |
+| `FFMPEG_PATH` | `ffmpeg` | Path to ffmpeg, used to convert link audio to MP3 so every browser can read it |
 | `YTDLP_COOKIES` | (none) | Path to a cookies.txt file, for hosts where YouTube asks to confirm you are not a bot |
 
 Keep yt-dlp up to date (`pip install -U yt-dlp`), since YouTube changes often. Downloading from YouTube is subject to YouTube's Terms of Service, so this is best kept to private use by your team. Transcribed lyrics are a draft: check them against the official lyrics before printing.

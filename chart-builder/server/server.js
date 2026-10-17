@@ -11,6 +11,7 @@ const path=require('path');
 
 const PORT=+process.env.PORT||8787;
 const YTDLP=process.env.YTDLP_PATH||'yt-dlp';
+const FFMPEG=process.env.FFMPEG_PATH||'ffmpeg';
 const COOKIES=process.env.YTDLP_COOKIES||'';
 const MAX_SECONDS=+process.env.MAX_DURATION||900;
 const ORIGINS=(process.env.ALLOWED_ORIGINS||'*').split(',').map(s=>s.trim()).filter(Boolean);
@@ -101,28 +102,43 @@ async function resolveLink(url){
   };
 }
 
-let active=0;
-function streamAudio(id,res){
+let active=0,hasFfmpeg=null;
+function ffmpegReady(){
+  if(hasFfmpeg===null)hasFfmpeg=new Promise(r=>{const p=spawn(FFMPEG,['-version'],{stdio:'ignore'});p.on('error',()=>r(false));p.on('close',c=>r(c===0));});
+  return hasFfmpeg;
+}
+// YouTube audio arrives as fragmented MP4 or WebM, which not every browser can decode,
+// so it is converted to MP3 on the way through when ffmpeg is available.
+async function streamAudio(id,res){
   if(!/^[A-Za-z0-9_-]{11}$/.test(id))throw httpError(400,'Invalid video id.');
   if(active>=MAX_DOWNLOADS)throw httpError(503,'The server is busy. Try again in a minute.');
   active++;
-  const p=spawn(YTDLP,ytdlpArgs(['-f','bestaudio[ext=m4a]/bestaudio','--match-filter','duration<='+MAX_SECONDS,'-o','-','https://www.youtube.com/watch?v='+id]));
-  let started=false,err='';
-  const done=()=>{active=Math.max(0,active-1);};
-  p.stderr.on('data',d=>err+=d);
+  const convert=await ffmpegReady();
+  const dl=spawn(YTDLP,ytdlpArgs(['-f','bestaudio[ext=m4a]/bestaudio','--match-filter','duration<='+MAX_SECONDS,'-o','-','https://www.youtube.com/watch?v='+id]));
+  let out=dl.stdout,conv=null;
+  if(convert){
+    conv=spawn(FFMPEG,['-hide_banner','-loglevel','error','-i','pipe:0','-vn','-ac','2','-ar','44100','-b:a','160k','-f','mp3','pipe:1']);
+    dl.stdout.pipe(conv.stdin);
+    conv.stdin.on('error',()=>{});
+    out=conv.stdout;
+  }
+  let started=false,err='',finished=false;
+  const done=()=>{if(!finished){finished=true;active=Math.max(0,active-1);}};
+  dl.stderr.on('data',d=>err+=d);
+  if(conv)conv.stderr.on('data',d=>err+=d);
   // headers wait for the first audio bytes so a failed download can still answer with an error
-  p.stdout.once('data',chunk=>{
+  out.once('data',chunk=>{
     started=true;
-    res.writeHead(200,{'Content-Type':'audio/mp4','Cache-Control':'no-store'});
+    res.writeHead(200,{'Content-Type':convert?'audio/mpeg':'audio/mp4','Cache-Control':'no-store'});
     res.write(chunk);
-    p.stdout.pipe(res);
+    out.pipe(res);
   });
-  p.on('close',code=>{
+  (conv||dl).on('close',code=>{
     done();
     if(!started)sendJson(res,502,{error:'Could not download that audio: '+(err.split('\n').filter(Boolean).pop()||'exit '+code)});
   });
-  p.on('error',()=>{done();if(!started)sendJson(res,500,{error:'yt-dlp is not installed on this server.'});});
-  res.on('close',()=>{if(p.exitCode===null)p.kill('SIGKILL');});
+  dl.on('error',()=>{done();if(!started)sendJson(res,500,{error:'yt-dlp is not installed on this server.'});});
+  res.on('close',()=>{[dl,conv].forEach(p=>{if(p&&p.exitCode===null)p.kill('SIGKILL');});});
 }
 
 // ---------- lyrics ----------
@@ -170,8 +186,9 @@ function which(cmd,args){
 async function capabilities(){
   if(!caps)caps=Promise.all([
     which(YTDLP,['--version']),
-    TRANSCRIBE_CMD?Promise.resolve(true):which(PYTHON,['-c','import faster_whisper'])
-  ]).then(([links,lyrics])=>({ok:true,links,lyrics}));
+    TRANSCRIBE_CMD?Promise.resolve(true):which(PYTHON,['-c','import faster_whisper']),
+    ffmpegReady()
+  ]).then(([links,lyrics,mp3])=>({ok:true,links,lyrics,mp3}));
   return caps;
 }
 
@@ -211,7 +228,7 @@ const server=http.createServer(async(req,res)=>{
   if(limited(ip))return sendJson(res,429,{error:'Too many requests. Try again in a few minutes.'});
   try{
     if(u.pathname==='/api/resolve')return sendJson(res,200,await resolveLink((u.searchParams.get('url')||'').trim()));
-    if(u.pathname==='/api/audio')return streamAudio(u.searchParams.get('id')||'',res);
+    if(u.pathname==='/api/audio')return await streamAudio(u.searchParams.get('id')||'',res);
     if(u.pathname==='/api/transcribe'&&req.method==='POST')return sendJson(res,200,await transcribe(req));
     sendJson(res,404,{error:'Not found'});
   }catch(e){

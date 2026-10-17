@@ -21,7 +21,9 @@ def main(path):
         path,
         language="en" if name.endswith(".en") else None,
         word_timestamps=True,
-        vad_filter=True,
+        # no voice activity filter: it treats singing over a band as non-speech and drops it
+        vad_filter=False,
+        hallucination_silence_threshold=2.0,
         beam_size=5,
         # songs repeat lines; conditioning on earlier text makes Whisper loop
         condition_on_previous_text=False,

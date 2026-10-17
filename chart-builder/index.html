@@ -119,9 +119,9 @@
   }
 </style>
 <script>
-  // Address of the builder's server (see README.md). Leave empty when the server also serves
-  // this page, which is the normal setup.
-  window.CB_CONFIG={audioService:''};
+  // Address of the builder's server (see README.md), used for song links and lyrics.
+  // Local development talks to the server that serves the page.
+  window.CB_CONFIG={audioService:/^(localhost|127\.0\.0\.1)$/.test(location.hostname)?'':'https://curate-house-charts.onrender.com'};
 </script>
 </head>
 <body>
