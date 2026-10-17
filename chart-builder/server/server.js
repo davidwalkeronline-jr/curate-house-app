@@ -50,21 +50,56 @@ function parseSpotifyPage(html){
   if(og)return {title:decodeEntities(og[1]),artist:desc?decodeEntities(desc[1]).split(' · ')[0]:''};
   return null;
 }
+const BROWSER_UA='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36';
+// Spotify's track page is now an empty app shell for browsers, so read the public embed
+// player's data first, then the page as link previews see it, then oEmbed (title only).
+function parseSpotifyEmbed(html){
+  const m=/<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/.exec(html);
+  if(!m)return null;
+  try{
+    const e=JSON.parse(m[1]).props.pageProps.state.data.entity;
+    const title=e.name||e.title;
+    if(!title)return null;
+    return {title,artist:(e.artists||[]).map(a=>a.name).filter(Boolean).join(', '),duration:e.duration?e.duration/1000:null};
+  }catch(err){return null;}
+}
+async function getText(url,ua){
+  const res=await fetch(url,{headers:{'User-Agent':ua,'Accept-Language':'en'}});
+  return res.ok?res.text():'';
+}
 async function spotifyMeta(url){
   const page=spotifyUrl(url);
   if(!page)throw httpError(400,'That Spotify link does not point to a track.');
-  const res=await fetch(page,{headers:{'User-Agent':'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36','Accept-Language':'en'}});
-  if(!res.ok)throw httpError(502,'Spotify did not return that track.');
-  const meta=parseSpotifyPage(await res.text());
-  if(!meta||!meta.title)throw httpError(502,'Could not read the song title from Spotify.');
+  const id=page.split('/').pop();
+  let meta=null;
+  try{meta=parseSpotifyEmbed(await getText('https://open.spotify.com/embed/track/'+id,BROWSER_UA));}catch(e){}
+  if(!meta||!meta.artist){
+    try{const p=parseSpotifyPage(await getText(page,'facebookexternalhit/1.1'));if(p&&p.title)meta=Object.assign({},meta,p);}catch(e){}
+  }
+  if(!meta){
+    try{
+      const o=await fetch('https://open.spotify.com/oembed?url='+encodeURIComponent(page));
+      if(o.ok){const j=await o.json();if(j.title)meta={title:j.title,artist:''};}
+    }catch(e){}
+  }
+  if(!meta||!meta.title)throw httpError(502,'Could not read that song from Spotify. Try the YouTube link for it instead.');
   return meta;
+}
+// Of a few YouTube search results, take the one closest in length to the Spotify track,
+// skipping live, cover, karaoke and instrumental versions unless the track itself is one.
+function pickMatch(entries,meta){
+  const avoid=/\b(live|cover|karaoke|instrumental|lyric video|reaction|tutorial|sped up|slowed|remix)\b/i;
+  const ok=entries.filter(e=>e&&e.id&&(!avoid.test(e.title||'')||avoid.test(meta.title)));
+  const pool=ok.length?ok:entries.filter(e=>e&&e.id);
+  if(!meta.duration)return pool[0];
+  return pool.slice().sort((a,b)=>Math.abs((a.duration||1e9)-meta.duration)-Math.abs((b.duration||1e9)-meta.duration))[0];
 }
 
 function httpError(status,message){const e=new Error(message);e.status=status;return e;}
 function ytdlpArgs(extra){return (COOKIES?['--cookies',COOKIES]:[]).concat(['--no-playlist','--no-warnings'],extra);}
-function runJson(target){
+function runJson(target,extra){
   return new Promise((resolve,reject)=>{
-    const p=spawn(YTDLP,ytdlpArgs(['--dump-single-json','--skip-download',target]));
+    const p=spawn(YTDLP,ytdlpArgs(['--dump-single-json','--skip-download'].concat(extra||[],[target])));
     let out='',err='';
     p.stdout.on('data',d=>out+=d);p.stderr.on('data',d=>err+=d);
     p.on('error',()=>reject(httpError(500,'yt-dlp is not installed on this server.')));
@@ -81,10 +116,10 @@ async function resolveLink(url){
   let meta=null,target=url;
   if(k==='spotify'){
     meta=await spotifyMeta(url);
-    target='ytsearch1:'+meta.artist+' '+meta.title+' audio';
+    target='ytsearch5:'+(meta.artist?meta.artist+' ':'')+meta.title+' audio';
   }
-  let info=await runJson(target);
-  if(info&&info.entries)info=info.entries[0];
+  let info=await runJson(target,meta?['--flat-playlist']:[]);
+  if(info&&info.entries)info=meta?pickMatch(info.entries,meta):info.entries[0];
   if(!info||!info.id)throw httpError(404,'No matching video was found.');
   if(info.duration&&info.duration>MAX_SECONDS)throw httpError(413,'That video is longer than '+Math.round(MAX_SECONDS/60)+' minutes.');
   if(!meta){
@@ -238,4 +273,4 @@ const server=http.createServer(async(req,res)=>{
 });
 
 if(require.main===module)server.listen(PORT,()=>console.log('Chord Chart Builder running on http://localhost:'+PORT));
-module.exports={kind,parseSpotifyPage,server};
+module.exports={kind,parseSpotifyPage,parseSpotifyEmbed,pickMatch,server};
