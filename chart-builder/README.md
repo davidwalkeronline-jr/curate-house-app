@@ -9,13 +9,13 @@ A standalone app that listens to a song and drafts a numbers chart modeled on th
 
 ## What it analyzes
 
-Chords are recognized on the server by [madmom](https://github.com/CPJKU/madmom)'s trained chord model, which is far more accurate on real recordings. Tempo, beats, structure, and dynamics are analyzed in the browser, and the browser falls back to a basic chord detector when the server is unreachable. The server also handles links and lyrics transcription.
+Everything is worked out on the user's own device, in the browser: no audio is sent anywhere for analysis. Chords come from a JavaScript port of the [crema](https://github.com/bmcfee/crema) chord model, which recognizes major, minor, sus2, sus4, 6th, 7th, diminished and augmented chords plus the bass note, so slash chords appear too. A full song takes a few seconds on a typical computer. The server is only needed for YouTube and Spotify links.
 
 * tempo, beats, and downbeats
-* key and chords, including slash chords like 1/3
+* key and chords, including sus, 7th and slash chords like 4sus2 and 1/3
 * song structure: Intro, Verse, Pre-Chorus, Chorus, Bridge, Instrumental, Turnaround, Tag, Outro, with repeats marked
 * band dynamics per section (a marking from pp to ff plus cues like Keys + pad, Drums in, Build, Break down, Full band)
-* lyrics, written automatically unless you paste them: first timed lyrics looked up on [LRCLIB](https://lrclib.net) from the title and artist, otherwise transcribed from the vocals by the server's speech model ([faster-whisper](https://github.com/SYSTRAN/faster-whisper)). Without the server, the browser tries a smaller speech model of its own, which is slower.
+* lyrics, written automatically unless you paste them: first timed lyrics looked up on [LRCLIB](https://lrclib.net) from the title and artist, otherwise transcribed from the vocals by a speech model (Whisper base.en through [transformers.js](https://github.com/huggingface/transformers.js)) running in the browser. It downloads about 130 MB the first time and is fastest in browsers with WebGPU. If a browser cannot run it, the server's copy of the model is used instead.
 
 ## Running it
 
@@ -28,7 +28,7 @@ docker build -t chord-chart-builder chart-builder
 docker run -p 8787:8787 chord-chart-builder
 ```
 
-Then open http://localhost:8787. The image includes yt-dlp, ffmpeg, madmom, faster-whisper, and the speech model. Deploy the same image to any host that runs containers (Render, Railway, Fly.io, a VPS) and the host's address is the app's address. Chord recognition and transcription are CPU heavy: a full CPU handles a song in about a minute or two, while Render's free plan (a tenth of a CPU) can take ten minutes or more.
+Then open http://localhost:8787. The image includes yt-dlp, ffmpeg, and faster-whisper (the lyrics fallback). Deploy the same image to any host that runs containers (Render, Railway, Fly.io, a VPS) and the host's address is the app's address. The server does no chord work, so a small plan is fine. Lyrics fall back to it only when a browser cannot run the speech model, and that is slow on small plans.
 
 ### On Render
 
@@ -39,9 +39,7 @@ The repository includes `render.yaml`. In Render, choose **New > Blueprint**, pi
 Needs Node 18 or newer and Python 3:
 
 ```
-pip install "numpy<2" cython scipy mido setuptools wheel
-pip install --no-build-isolation git+https://github.com/CPJKU/madmom
-pip install yt-dlp faster-whisper "numpy<2"
+pip install yt-dlp faster-whisper
 node chart-builder/server/server.js
 ```
 
@@ -57,7 +55,7 @@ Any static host (Netlify, GitHub Pages) can serve this folder. `window.CB_CONFIG
 |---|---|---|
 | `PORT` | `8787` | Port to listen on |
 | `WHISPER_MODEL` | `base.en` | Speech model. `small.en` is more accurate and needs about 2 GB of memory |
-| `MAX_UPLOAD_MB` | `40` | Largest audio accepted for chord and lyrics analysis |
+| `MAX_UPLOAD_MB` | `40` | Largest audio accepted for fallback lyrics transcription |
 | `ALLOWED_ORIGINS` | `*` | Comma separated origins allowed to call the API, for example `https://curate.house` |
 | `MAX_DURATION` | `900` | Longest linked song accepted, in seconds |
 | `MAX_DOWNLOADS` | `3` | Link downloads allowed at the same time |
@@ -72,12 +70,18 @@ Keep yt-dlp up to date (`pip install -U yt-dlp`), since YouTube changes often. D
 
 * `index.html`: the app page and styles
 * `js/theory.js`: keys, chord spelling, transposing, Nashville numbers
-* `js/analysis.js`: audio analysis (beats, chords, structure)
+* `js/analysis.js`: audio analysis (beats, bars, structure; basic chord detection as a last resort)
+* `js/chords.js`: the crema chord model running in the browser
+* `models/`: the chord model's weights (`crema-chord.bin`, `crema-chord.json`)
 * `js/build.js`: turns analysis and lyrics into chart sections, dynamics, and the roadmap
 * `js/sources.js`: link import, lyrics lookup, and server transcription
 * `js/pdf.js`: PDF layout
 * `js/app.js`: the editor
 * `server/server.js`: the server (page, links, lyrics)
-* `server/chords.py`: chord recognition
-* `server/transcribe.py`: lyrics transcription with word timings
+* `server/transcribe.py`: fallback lyrics transcription with word timings
 * `fonts/`: Open Sans, under the SIL Open Font License (`fonts/OFL.txt`)
+
+## Credits
+
+* Chord model: crema by Brian McFee, BSD 2-Clause License (`models/CREMA-LICENSE.md`). Converted to run in the browser.
+* Open Sans, SIL Open Font License (`fonts/OFL.txt`).

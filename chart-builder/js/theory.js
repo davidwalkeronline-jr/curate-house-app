@@ -38,11 +38,12 @@ var CBT=(function(){
   function chordName(c,key){
     return spell(c.root,key)+c.qual+(c.bass!=null?'/'+spell(c.bass,key):'');
   }
-  // Nashville degree of a pitch class relative to the key tonic (major scale steps).
+  // Nashville degree of a pitch class (major scale steps). Minor keys are numbered from their
+  // relative major, as worship charts do, so the minor tonic reads 6m.
   var DEG=['1','b2','2','b3','3','4','#4','5','b6','6','b7','7'];
   function degree(pc,key){
-    var k=parseKey(key);
-    return DEG[((pc-k.pc)%12+12)%12];
+    var k=parseKey(key),tonic=k.minor?(k.pc+3)%12:k.pc;
+    return DEG[((pc-tonic)%12+12)%12];
   }
   function toNumber(str,key){
     var c=parseChord(str);

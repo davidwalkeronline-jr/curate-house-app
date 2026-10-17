@@ -3,7 +3,7 @@
   var STORE='cb-chart-v1';
   var CHIPS=['Keys + pad','Acoustic only','Band in','Drums in','Drums out','No drums','Build','Full band','All in','Break down','Pull back','Hits','Hold','Half time','Vocals only','Fade out','Ring out'];
   var NAMES=['Intro','Verse 1','Verse 2','Verse 3','Verse 4','Pre-Chorus','Chorus','Chorus 2','Post-Chorus','Bridge','Bridge 2','Instrumental','Interlude','Turnaround','Tag','Vamp','Outro','Ending'];
-  var STEP_W={fetch:16,decode:4,server:46,features:14,tempo:3,chords:4,structure:3,lyrics:6,chart:4};
+  var STEP_W={fetch:14,decode:4,model:20,features:10,tempo:3,chords:3,structure:3,lyrics:40,chart:3};
   var file=null,source='file',chart=null,previewTimer=null,previewUrl=null,stepState={};
 
   function $(id){return document.getElementById(id);}
@@ -71,13 +71,13 @@
     var btn=$('cb-analyze');btn.disabled=true;$('cb-blank').disabled=true;
     $('cb-progress').style.display='block';
     var lyrics=$('cb-lyrics').value.trim(),auto=!lyrics&&$('cb-autolyrics').checked;
-    stepState={lyrics:auto?'':'skip',fetch:source==='file'?'skip':'',server:''};
+    stepState={lyrics:auto?'':'skip',fetch:source==='file'?'skip':'',model:''};
     var t0=Date.now();
     try{
       var got=await getAudio();
       report('decode',0.3,'Decoding audio');
       var buf=await CBA.decode(got.buf);
-      var title=$('cb-in-title').value.trim(),artist=$('cb-in-artist').value.trim(),words=null,note='',server=null;
+      var title=$('cb-in-title').value.trim(),artist=$('cb-in-artist').value.trim(),words=null,note='';
       // Lyrics: pasted, then timed lyrics found online, then transcribed from the vocals.
       if(auto&&title){
         report('decode',1,'Looking up lyrics');
@@ -85,41 +85,38 @@
         if(found&&found.words&&found.words.length){words=found.words;note='Timed lyrics found on '+found.source;}
         else if(found&&found.plain){lyrics=found.plain;note='Lyrics found on '+found.source;}
       }
-      var needLyrics=auto&&!words&&!lyrics,h=await CBS.health();
-      // The server's trained chord model is far more accurate than the in-browser fallback.
-      if(h.chords||(needLyrics&&h.lyrics)){
-        var want={chords:h.chords,lyrics:needLyrics&&h.lyrics},tStart=Date.now(),expect=Math.max(40,buf.duration*(want.lyrics?0.9:0.45));
-        report('server',0.02,'Sending the song to the server');
-        try{
-          server=await CBS.analyzeAudio(await CBA.resample(buf,22050),22050,want,function(st){
-            var frac=Math.min(0.95,(Date.now()-tStart)/1000/expect);
-            report('server',frac,st.status==='queued'?'Waiting for the server ('+(st.ahead||1)+' song'+(st.ahead>1?'s':'')+' ahead)':
-              st.step==='lyrics'?'Writing out the lyrics from the vocals':'Recognizing chords');
-          });
-          if(want.lyrics){
-            if(server.words&&server.words.length){words=server.words;note='Lyrics transcribed from the vocals ('+words.length+' words). Check them before rehearsal.';}
-            else note='No clear vocals heard. Paste the lyrics to add them.';
-          }
-        }catch(e){console.warn('Server analysis failed',e);server=null;}
-        report('server',1);
-      } else stepState.server='skip';
-      var serverChords=server&&server.chords&&server.chords.length?server.chords:null;
-      var A=await CBA.analyze(buf,{time:$('cb-in-time').value,chords:serverChords},report);
-      if(needLyrics&&!words&&!(want&&want.lyrics)){
+      var needLyrics=auto&&!words&&!lyrics;
+      // Chords: the trained chord model runs on this device (no server involved).
+      var chordSegs=null;
+      report('model',0.02,'Recognizing chords on this device');
+      try{chordSegs=await CBC.analyze(buf,function(f){report('model',f,'Recognizing chords on this device');});}
+      catch(e){console.warn('On-device chord model failed',e);}
+      report('model',1);
+      var A=await CBA.analyze(buf,{time:$('cb-in-time').value,chords:chordSegs},report);
+      // Lyrics: the speech model also runs on this device. The server is only a fallback for
+      // browsers that cannot run it.
+      if(needLyrics){
         var tick=setInterval(function(){
           var s=$('cb-status');
-          if(/^Listening for lyrics/.test(s.textContent))s.textContent='Listening for lyrics. Longer songs can take a few minutes. ('+Math.round((Date.now()-t0)/1000)+'s)';
+          if(/^Listening for lyrics/.test(s.textContent))s.textContent='Listening for lyrics on this device. Longer songs can take a few minutes. ('+Math.round((Date.now()-t0)/1000)+'s)';
         },1000);
         try{
-          report('lyrics',0.08,'Loading the speech model');
+          report('lyrics',0.05,'Loading the speech model');
           words=await CBB.transcribe(await CBA.resample(buf,16000),report);
-          note=words.length?'Lyrics transcribed from the vocals ('+words.length+' words). Check them before rehearsal.':'No clear vocals heard';
         }catch(e){
-          console.warn('Lyric transcription failed',e);
-          note='Lyrics could not be transcribed here, so the chart has chords only. Paste the lyrics to add them.';
+          console.warn('On-device lyric transcription failed',e);
+          try{
+            if((await CBS.health()).lyrics){
+              report('lyrics',0.3,'This browser could not run the speech model, so the server is writing out the lyrics');
+              var r=await CBS.analyzeAudio(await CBA.resample(buf,22050),22050,{chords:false,lyrics:true},function(){});
+              words=r.words||[];
+            }
+          }catch(e2){console.warn('Server lyric transcription failed',e2);}
         }finally{clearInterval(tick);}
+        note=words&&words.length?'Lyrics transcribed from the vocals ('+words.length+' words). Check them before rehearsal.':
+          words?'No clear vocals heard. Paste the lyrics to add them.':'Lyrics could not be transcribed here, so the chart has chords only. Paste the lyrics to add them.';
       }
-      if(!serverChords)note=(note?note+' ':'')+'Chords came from the basic in-browser detector because the server was unavailable, so check them closely.';
+      if(!chordSegs)note=(note?note+' ':'')+'Chords came from the basic detector because the chord model could not load, so check them closely.';
       if(stepState.lyrics!=='skip')report('lyrics',1,note||'No lyrics found. Paste them to add them.');
       report('chart',0.5,'Building the chart');
       chart=CBB.build(A,{lyrics:lyrics,words:words,title:title,artist:artist});

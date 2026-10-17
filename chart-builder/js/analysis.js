@@ -208,21 +208,36 @@ var CBA=(function(){
     return name;
   }
 
-  // [[start, end, "C#:min"], ...] from the server -> one state per beat (24 = no chord)
+  // Recognized chord segments [[start, end, "C#:min7/G#"], ...] -> per beat: the label covering most of
+  // the beat, plus a major/minor state (24 = no chord) used for key finding and downbeats.
   var PC={C:0,'C#':1,Db:1,D:2,'D#':3,Eb:3,E:4,F:5,'F#':6,Gb:6,G:7,'G#':8,Ab:8,A:9,'A#':10,Bb:10,B:11};
-  function serverPath(segs,beatTimes,beatDur){
-    var nb=beatTimes.length,out=new Array(nb),j=0;
+  var MINORISH={min:1,min7:1,min6:1,minmaj7:1,dim:1,dim7:1,hdim7:1};
+  var SUFFIX={maj:'','min':'m','7':'7',maj7:'maj7',min7:'m7',maj6:'6',min6:'m6',sus2:'sus2',sus4:'sus4',
+    dim:'dim',dim7:'dim7',hdim7:'m7b5',aug:'aug',minmaj7:'m(maj7)'};
+  function parseSeg(label){
+    var m=/^([A-G][#b]?):([^/]+)(?:\/([A-G][#b]?))?$/.exec(label||'');
+    if(!m||PC[m[1]]==null)return null;
+    return {root:PC[m[1]],qual:m[2],bass:m[3]!=null?PC[m[3]]:null};
+  }
+  function segmentPath(segs,beatTimes,beatDur){
+    var nb=beatTimes.length,states=new Array(nb),labels=new Array(nb),j=0;
     for(var b=0;b<nb;b++){
-      var t0=beatTimes[b],t1=b+1<nb?beatTimes[b+1]:t0+beatDur,ov=new Float32Array(25);
+      var t0=beatTimes[b],t1=b+1<nb?beatTimes[b+1]:t0+beatDur,ov={},best=null;
       while(j<segs.length&&segs[j][1]<=t0)j++;
       for(var k=j;k<segs.length&&segs[k][0]<t1;k++){
-        var m=/^([A-G][#b]?):(maj|min)/.exec(segs[k][2]),st=m&&PC[m[1]]!=null?PC[m[1]]*2+(m[2]==='min'?1:0):24;
-        ov[st]+=Math.min(t1,segs[k][1])-Math.max(t0,segs[k][0]);
+        var l=segs[k][2];ov[l]=(ov[l]||0)+Math.min(t1,segs[k][1])-Math.max(t0,segs[k][0]);
+        if(best===null||ov[l]>ov[best])best=l;
       }
-      var best=24;for(var s=0;s<25;s++)if(ov[s]>ov[best])best=s;
-      out[b]=best;
+      var c=parseSeg(best);
+      labels[b]=c;
+      states[b]=c?c.root*2+(MINORISH[c.qual]?1:0):24;
     }
-    return out;
+    return {states:states,labels:labels};
+  }
+  function segmentName(c,key){
+    if(!c)return 'N';
+    var suf=SUFFIX[c.qual]!=null?SUFFIX[c.qual]:c.qual;
+    return CBT.spell(c.root,key)+suf+(c.bass!=null&&c.bass!==c.root?'/'+CBT.spell(c.bass,key):'');
   }
 
   // ---------- main ----------
@@ -271,9 +286,9 @@ var CBA=(function(){
       for(var i=0;i<12;i++)total[i]+=bChroma[b*12+i]*bRms[b];
     }
 
-    // Chords recognized on the server (a trained model) replace the template guesses below:
+    // Chords from the trained model (crema, on the device) replace the template guesses below:
     // each beat takes the chord that covers most of it.
-    var given=opts.chords&&opts.chords.length?serverPath(opts.chords,beatTimes,beatDur):null;
+    var seg=opts.chords&&opts.chords.length?segmentPath(opts.chords,beatTimes,beatDur):null,given=seg&&seg.states;
 
     // meter + downbeat phase from where chord changes and bass hits land
     var change=new Float32Array(nb),kmax=0;
@@ -314,14 +329,15 @@ var CBA=(function(){
     }
     var relMin=(bestK+9)%12,isMinor=false;
     var profMin=prof.filter(function(p){return p.minor&&p.pc===relMin;})[0],profMaj=prof.filter(function(p){return !p.minor&&p.pc===bestK;})[0];
-    if(dur[relMin*2+1]>1.25*dur[bestK*2]&&profMin.score>profMaj.score)isMinor=true;
+    if(dur[relMin*2+1]>1.6*dur[bestK*2]&&profMin.score>profMaj.score+0.05)isMinor=true;
     var keyStr=isMinor?CBT.keyName(relMin,true):CBT.keyName(bestK,false);
     report('chords',0.6,'Key of '+keyStr);await tick();
 
     var path=given||viterbi(emis,nb,keyPrior(bestK),beatPos,M);
     // slash chords: bass on the chord's third, clearly louder than the root
     var labels=new Array(nb);
-    for(var b=0;b<nb;){
+    if(seg)for(var b=0;b<nb;b++)labels[b]=segmentName(seg.labels[b],keyStr);
+    else for(var b=0;b<nb;){
       var e=b;while(e+1<nb&&path[e+1]===path[b])e++;
       var st=path[b],bassPc=null;
       if(st!==24){

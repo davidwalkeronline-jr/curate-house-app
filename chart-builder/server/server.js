@@ -1,8 +1,8 @@
 // Chord Chart Builder server.
-// Serves the builder page, turns YouTube or Spotify links into audio the browser can analyze
-// (yt-dlp; Spotify tracks are matched to the same song on YouTube), recognizes chords
-// (madmom via chords.py), and transcribes sung lyrics with word timings (faster-whisper via
-// transcribe.py).
+// Serves the builder page and turns YouTube or Spotify links into audio the browser can analyze
+// (yt-dlp; Spotify tracks are matched to the same song on YouTube). Chords and lyrics are worked
+// out on the user's device; transcribe.py (faster-whisper) is only a fallback for browsers that
+// cannot run the speech model.
 'use strict';
 const http=require('http');
 const {spawn}=require('child_process');
@@ -195,8 +195,8 @@ async function streamAudio(id,res){
   }
 }
 
-// Chords (madmom) and lyrics (faster-whisper) run as background jobs: one upload, then the
-// page polls /api/job, so slow songs are not cut off by proxy timeouts.
+// Lyrics transcription (fallback only) runs as a background job: one upload, then the page
+// polls /api/job, so slow songs are not cut off by proxy timeouts.
 function scriptCommand(name,file){
   const override=process.env[name.toUpperCase()+'_CMD'];
   if(override)return [override,[file]];
@@ -226,8 +226,7 @@ function readBody(req,limit){
 const jobs=new Map();
 let queue=Promise.resolve();
 async function startJob(req,u){
-  const want={chords:u.searchParams.get('chords')!=='0',lyrics:u.searchParams.get('lyrics')==='1'};
-  if(!want.chords&&!want.lyrics)throw httpError(400,'Nothing to do.');
+  if(u.searchParams.get('lyrics')!=='1')throw httpError(400,'Nothing to do.');
   if([...jobs.values()].filter(j=>j.status!=='done'&&j.status!=='error').length>=5)throw httpError(503,'The server is busy. Try again in a few minutes.');
   const body=await readBody(req,MAX_UPLOAD);
   if(!body.length)throw httpError(400,'No audio was sent.');
@@ -238,12 +237,9 @@ async function startJob(req,u){
   jobs.set(id,job);
   queue=queue.then(async()=>{
     job.status='running';
-    for(const name of ['chords','transcribe']){
-      if(name==='chords'&&!want.chords||name==='transcribe'&&!want.lyrics)continue;
-      job.step=name==='chords'?'chords':'lyrics';
-      try{Object.assign(job.result,await runScript(name,file));}
-      catch(e){job.notes.push(e.message);}
-    }
+    job.step='lyrics';
+    try{Object.assign(job.result,await runScript('transcribe',file));}
+    catch(e){job.notes.push(e.message);}
     job.status='done';job.step='';
   }).finally(()=>fs.promises.unlink(file).catch(()=>{}));
   return {id};
@@ -264,9 +260,8 @@ async function capabilities(){
   if(!caps)caps=Promise.all([
     which(YTDLP,['--version']),
     process.env.TRANSCRIBE_CMD?Promise.resolve(true):which(PYTHON,['-c','import faster_whisper']),
-    process.env.CHORDS_CMD?Promise.resolve(true):which(PYTHON,['-c','import madmom']),
     ffmpegReady()
-  ]).then(([links,lyrics,chords,mp3])=>({ok:true,links,lyrics,chords,mp3}));
+  ]).then(([links,lyrics,mp3])=>({ok:true,links,lyrics,mp3}));
   return caps;
 }
 

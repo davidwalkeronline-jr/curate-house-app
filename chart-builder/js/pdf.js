@@ -107,13 +107,19 @@ var CBP=(function(){
     function drawRuns(runs,x,y){runs.forEach(function(r){font(r.s,r.z,r.c);doc.text(r.t,x,y-r.up);x+=tw(r.t,r.s,r.z);});}
 
     // ---------- content rows (x is the box's inner left edge) ----------
+    // chord tokens in rows; a row only breaks between bars so a bar's chords stay together
     function chordLine(tokens){
-      var rows=[],cur=[],cx=0,gap=11*k;
-      tokens.forEach(function(t){
-        var runs=t.bar?[{t:t.text,s:'bold',z:F.chord,c:MID,up:0}]:chordRuns(t.text),w=runsW(runs);
-        var g=cur.length?(t.newBar?gap*1.35:gap):0;
-        if(cur.length&&cx+g+w>inner){rows.push(cur);cur=[];cx=0;g=0;}
-        cur.push({x:cx+g,runs:runs});cx+=g+w;
+      var rows=[],cur=[],cx=0,gap=11*k,bars=[];
+      tokens.forEach(function(t,i){
+        var runs=t.bar?[{t:t.text,s:'bold',z:F.chord,c:MID,up:0}]:chordRuns(t.text);
+        if(i===0||t.newBar)bars.push([]);
+        bars[bars.length-1].push({runs:runs,w:runsW(runs)});
+      });
+      bars.forEach(function(bar){
+        var bw=bar.reduce(function(a,e,i){return a+(i?gap:0)+e.w;},0),g=cur.length?gap*1.35:0;
+        if(cur.length&&cx+g+bw>inner){rows.push(cur);cur=[];cx=0;g=0;}
+        cx+=g;
+        bar.forEach(function(e,i){if(i)cx+=gap;cur.push({x:cx,runs:e.runs});cx+=e.w;});
       });
       if(cur.length)rows.push(cur);
       return rows.map(function(r){return {h:R.bars,draw:function(x,y){r.forEach(function(e){drawRuns(e.runs,x+e.x,y+R.bars*0.66);});}};});

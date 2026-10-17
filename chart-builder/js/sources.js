@@ -5,12 +5,12 @@
 var CBS=(function(){
   function service(){return ((window.CB_CONFIG&&window.CB_CONFIG.audioService)||'').replace(/\/+$/,'');}
 
-  // What the server can do: {links, lyrics, chords}. All false when the page runs without it.
+  // What the server can do: {links, lyrics}. Both false when the page runs without it.
   var healthP=null;
   function health(){
     if(!healthP)healthP=(location.protocol==='file:'&&!service()?Promise.resolve(null):
       fetch(service()+'/api/health').then(function(r){return r.ok?r.json():null;}).catch(function(){return null;}))
-      .then(function(h){return {links:!!(h&&h.links),lyrics:!!(h&&h.lyrics),chords:!!(h&&h.chords)};});
+      .then(function(h){return {links:!!(h&&h.links),lyrics:!!(h&&h.lyrics)};});
     return healthP;
   }
 
@@ -109,9 +109,9 @@ var CBS=(function(){
     for(var i=0;i<n;i++){var x=Math.max(-1,Math.min(1,pcm[i]));v.setInt16(44+i*2,x<0?x*0x8000:x*0x7FFF,true);}
     return new Blob([buf],{type:'audio/wav'});
   }
-  // One upload, then poll the job until the server has chords and/or lyrics.
+  // Fallback lyrics transcription: one upload, then poll the job until the server is done.
   async function analyzeAudio(pcm,rate,want,onStatus){
-    var q='?chords='+(want.chords?1:0)+'&lyrics='+(want.lyrics?1:0);
+    var q='?lyrics='+(want.lyrics?1:0);
     var job=await (await api('/api/analyze'+q,{method:'POST',headers:{'Content-Type':'audio/wav'},body:wav16(pcm,rate)})).json();
     for(;;){
       await new Promise(function(r){setTimeout(r,2500);});
