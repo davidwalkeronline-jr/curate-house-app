@@ -457,5 +457,15 @@ var CBA=(function(){
     return segs;
   }
 
-  return {decode:decode,resample:resample,analyze:analyze};
+  // A mono 44.1 kHz copy of the song, so the decoded original (often stereo) can be released.
+  async function toMono44(buf){
+    if(buf.numberOfChannels===1&&buf.sampleRate===44100)return buf;
+    var y=await resample(buf,44100),out;
+    try{out=new AudioBuffer({length:y.length,numberOfChannels:1,sampleRate:44100});}
+    catch(e){var OC=window.OfflineAudioContext||window.webkitOfflineAudioContext;out=new OC(1,1,44100).createBuffer(1,y.length,44100);}
+    if(out.copyToChannel)out.copyToChannel(y,0);else out.getChannelData(0).set(y);
+    return out;
+  }
+
+  return {decode:decode,resample:resample,toMono44:toMono44,analyze:analyze};
 })();

@@ -10,6 +10,9 @@
   function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
   function save(){try{localStorage.setItem(STORE,JSON.stringify(chart));}catch(e){}}
   function load(){try{var s=localStorage.getItem(STORE);return s?JSON.parse(s):null;}catch(e){return null;}}
+  // set while lyrics are being written; still set on the next visit means the page was killed
+  var LYRICS_FLAG='cb-lyrics-running',CRASH_FLAG='cb-lyrics-crashed';
+  function lyricsCrashed(){try{return !!localStorage.getItem(CRASH_FLAG);}catch(e){return false;}}
 
   // ---------- upload ----------
   function setFile(f){
@@ -76,7 +79,11 @@
     try{
       var got=await getAudio();
       report('decode',0.3,'Decoding audio');
-      var buf=await CBA.decode(got.buf);
+      var buf=await CBA.decode(got.buf);got=null;
+      // Make the speech model's 16 kHz copy now, then swap the decoded audio for one mono copy:
+      // keeping several full copies of a song runs phones out of memory.
+      var pcm16=auto&&!lyrics?await CBA.resample(buf,16000):null;
+      buf=await CBA.toMono44(buf);
       var title=$('cb-in-title').value.trim(),artist=$('cb-in-artist').value.trim(),words=null,note='';
       // Lyrics: pasted, otherwise transcribed from the vocals in the audio itself.
       var needLyrics=auto&&!words&&!lyrics;
@@ -87,6 +94,19 @@
       catch(e){console.warn('On-device chord model failed',e);}
       report('model',1);
       var A=await CBA.analyze(buf,{time:$('cb-in-time').value,chords:chordSegs},report);
+      var chordNote=chordSegs?'Chords: recognized on this device':'Chords: basic detector (chord model did not load)';
+      // A phone that runs out of memory during lyrics reloads the page, so save the chords chart
+      // first and leave a flag; after a reload the chart reopens and lyrics are skipped next time.
+      if(needLyrics&&lyricsCrashed()){
+        needLyrics=false;
+        note='Lyrics: skipped, because this device ran out of memory writing them last time. Paste the lyrics, or make the chart on a computer.';
+      }
+      if(needLyrics){
+        chart=CBB.build(A,{lyrics:lyrics,title:title,artist:artist});
+        chart.made=chordNote+'  ·  Lyrics: this device ran out of memory writing them, so this chart has chords only. Paste the lyrics, or make the chart on a computer.';
+        save();
+        try{localStorage.setItem(LYRICS_FLAG,String(Date.now()));}catch(e){}
+      }
       // Lyrics: the speech model also runs on this device. The server is only a fallback for
       // browsers that cannot run it.
       if(needLyrics){
@@ -96,7 +116,7 @@
         },1000);
         try{
           report('lyrics',0.05,'Loading the speech model');
-          words=await CBB.transcribe(await CBA.resample(buf,16000),report);
+          words=await CBB.transcribe(pcm16||await CBA.resample(buf,16000),report);pcm16=null;
         }catch(e){
           console.warn('On-device lyric transcription failed',e);
           try{
@@ -107,6 +127,7 @@
             }
           }catch(e2){console.warn('Server lyric transcription failed',e2);}
         }finally{clearInterval(tick);}
+        try{localStorage.removeItem(LYRICS_FLAG);}catch(e){}
         note=words&&words.length?'Lyrics transcribed from the vocals ('+words.length+' words). Check them before rehearsal.':
           words?'No clear vocals heard. Paste the lyrics to add them.':'Lyrics could not be transcribed here, so the chart has chords only. Paste the lyrics to add them.';
       }
@@ -115,8 +136,7 @@
       report('chart',0.5,'Building the chart');
       chart=CBB.build(A,{lyrics:lyrics,words:words,title:title,artist:artist});
       // shown above the editor so it is clear where the chords and lyrics came from
-      chart.made=[chordSegs?'Chords: recognized on this device':'Chords: basic detector (chord model did not load)',
-        lyrics&&!note?'Lyrics: pasted':(note||'Lyrics: none')].join('  ·  ');
+      chart.made=[chordNote,lyrics&&!note?'Lyrics: pasted':(note||'Lyrics: none')].join('  ·  ');
       report('chart',1,'Done');
       openEditor();
     }catch(e){
@@ -252,6 +272,19 @@
     $('cb-analyze').addEventListener('click',analyzeFile);
     $('cb-blank').addEventListener('click',blankChart);
     if(load())$('cb-resume').style.display='';
+    var interrupted=null;try{interrupted=localStorage.getItem(LYRICS_FLAG);}catch(e){}
+    function crashNote(){
+      if(!lyricsCrashed())return;
+      $('cb-autolyrics').checked=false;
+      $('cb-autolyrics').nextElementSibling.textContent='Write the lyrics from the vocals. This device ran out of memory doing that last time, so it is off. Tick to try again anyway.';
+    }
+    $('cb-autolyrics').addEventListener('change',function(){if(this.checked)try{localStorage.removeItem(CRASH_FLAG);}catch(e){}});
+    if(interrupted){
+      try{localStorage.removeItem(LYRICS_FLAG);localStorage.setItem(CRASH_FLAG,'1');}catch(e){}
+      chart=load();
+      if(chart)openEditor();
+    }
+    crashNote();
     $('cb-resume').addEventListener('click',function(){chart=load();if(chart)openEditor();});
     $('cb-new').addEventListener('click',function(){
       $('cb-editor').style.display='none';$('cb-upload').style.display='block';

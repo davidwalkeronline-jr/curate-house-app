@@ -396,12 +396,15 @@ var CBB=(function(){
         if(t)report('lyrics',0.3*l/t,'Downloading speech model '+Math.round(100*l/t)+'%');
       }
     }
+    // Phones and tablets get Whisper tiny (64 MB): base (140 MB) runs them out of memory and the
+    // browser reloads the page. Computers use base, on the graphics chip when available.
+    var small=smallDevice(),model=small?'Xenova/whisper-tiny.en':'Xenova/whisper-base.en';
     function load(device){
-      return T.pipeline('automatic-speech-recognition','Xenova/whisper-base.en',
+      return T.pipeline('automatic-speech-recognition',model,
         {device:device,dtype:{encoder_model:'fp32',decoder_model_merged:device==='webgpu'?'q4':'q8'},progress_callback:onProg});
     }
     var asr=null;
-    if(navigator.gpu){try{asr=await load('webgpu');await asr(new Float32Array(16000));}catch(e){asr=null;}}
+    if(navigator.gpu&&!small){try{asr=await load('webgpu');await asr(new Float32Array(16000));}catch(e){asr=null;}}
     if(!asr)asr=await load('wasm');
     var SR=16000,WIN=30*SR,words=[],pos=0;
     function junk(w){return !w||/^[\[(♪*]|[\])♪]$/.test(w)||/^(music|applause|instrumental)$/i.test(w);}
@@ -426,7 +429,16 @@ var CBB=(function(){
       if(last)break;
       pos+=Math.max(5*SR,Math.round(keep[keep.length-1].end*SR));
     }
+    // free the model's memory now that the lyrics are done
+    try{if(asr.dispose)await asr.dispose();}catch(e){}
     return words;
+  }
+  function smallDevice(){
+    var ua=navigator.userAgent||'';
+    if(navigator.userAgentData&&navigator.userAgentData.mobile)return true;
+    if(/iPhone|iPad|iPod|Android/i.test(ua))return true;
+    if(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1)return true;  // iPad in desktop mode
+    return !!(navigator.deviceMemory&&navigator.deviceMemory<=4);
   }
 
   function abbr(name){
