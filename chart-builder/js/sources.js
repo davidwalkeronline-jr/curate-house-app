@@ -1,4 +1,4 @@
-// =================== SOURCES: LINKS, LYRICS LOOKUP, LYRICS TRANSCRIPTION ===================
+// =================== SOURCES: LINKS AND FALLBACK LYRICS TRANSCRIPTION ===================
 // Browsers cannot pull audio out of YouTube or Spotify, so links go through the builder's server
 // (server/, yt-dlp). Spotify links are matched to the same song on YouTube. The server also
 // transcribes sung lyrics with word timings.
@@ -52,53 +52,6 @@ var CBS=(function(){
     return out.buffer;
   }
 
-  // ---------- lyrics from LRCLIB (free, open lyrics database with line timings) ----------
-  function cleanTitle(t){
-    return (t||'').replace(/\s*[\(\[][^\)\]]*(official|lyric|audio|video|live|visualizer|hd)[^\)\]]*[\)\]]/ig,'')
-      .replace(/\s*\|.*$/,'').replace(/\s+-\s+(official|lyric).*$/i,'').trim();
-  }
-  async function lyrics(title,artist,duration){
-    title=cleanTitle(title);
-    if(!title)return null;
-    var base='https://lrclib.net/api/';
-    var hit=null;
-    try{
-      if(artist){
-        var q='get?track_name='+encodeURIComponent(title)+'&artist_name='+encodeURIComponent(artist)+(duration?'&duration='+Math.round(duration):'');
-        var r=await fetch(base+q);
-        if(r.ok)hit=await r.json();
-      }
-      if(!hit||(!hit.syncedLyrics&&!hit.plainLyrics)){
-        var r2=await fetch(base+'search?q='+encodeURIComponent((artist?artist+' ':'')+title));
-        if(r2.ok){
-          var list=await r2.json();
-          list=list.filter(function(x){return x.syncedLyrics||x.plainLyrics;});
-          if(duration)list.sort(function(a,b){return Math.abs(a.duration-duration)-Math.abs(b.duration-duration);});
-          list.sort(function(a,b){return (!!b.syncedLyrics)-(!!a.syncedLyrics);});
-          hit=list.filter(function(x){return !duration||Math.abs(x.duration-duration)<8;})[0]||null;
-        }
-      }
-    }catch(e){console.warn('Lyrics lookup failed',e);return null;}
-    if(!hit)return null;
-    return {plain:hit.plainLyrics||'',words:hit.syncedLyrics?syncedWords(hit.syncedLyrics):null,source:'LRCLIB'};
-  }
-  // "[01:02.35] line" -> words with estimated timing, one line break flag per lyric line
-  function syncedWords(lrc){
-    var lines=[];
-    lrc.split('\n').forEach(function(l){
-      var m=/^\[(\d+):(\d+(?:\.\d+)?)\]\s*(.*)$/.exec(l.trim());
-      if(m)lines.push({t:+m[1]*60+ +m[2],text:m[3].trim()});
-    });
-    var words=[];
-    lines.forEach(function(ln,i){
-      if(!ln.text)return;
-      var parts=ln.text.split(/\s+/),next=lines[i+1]?lines[i+1].t:ln.t+4;
-      var span=Math.min(next-ln.t,0.42*parts.length+1.2)*0.92,step=span/parts.length;
-      parts.forEach(function(w,j){words.push({text:w,start:ln.t+j*step,end:ln.t+(j+1)*step,br:j===0});});
-    });
-    return words;
-  }
-
   // ---------- lyrics transcription on the server ----------
   function wav16(pcm,rate){
     var n=pcm.length,buf=new ArrayBuffer(44+n*2),v=new DataView(buf);
@@ -124,5 +77,5 @@ var CBS=(function(){
     }
   }
 
-  return {service:service,health:health,kind:kind,resolve:resolve,fetchAudio:fetchAudio,lyrics:lyrics,syncedWords:syncedWords,analyzeAudio:analyzeAudio};
+  return {service:service,health:health,kind:kind,resolve:resolve,fetchAudio:fetchAudio,analyzeAudio:analyzeAudio};
 })();

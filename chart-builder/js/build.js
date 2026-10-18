@@ -60,11 +60,21 @@ var CBB=(function(){
   function label(A,words){
     var bars=A.bars,segs=A.segments.map(function(s){return {start:s.start,end:s.end,cluster:s.cluster};});
     var known=!!(words&&words.length);
+    // sung phrases stay whole: each goes to the section holding its midpoint, so a pickup
+    // ("Never gonna | give you up") moves with the line it belongs to
+    var phrases=[];
+    if(known)words.forEach(function(w,i){
+      var p=phrases[phrases.length-1],prev=words[i-1];
+      if(!p||w.br||w.start-prev.end>0.6||p.length>=10||(/[.!?,;]$/.test(prev.text)&&p.length>=4))phrases.push([w]);else p.push(w);
+    });
+    if(known){var lastT=bars[bars.length-1].end,firstT=bars[0].start;
+      phrases.forEach(function(ph){var mid=(ph[0].start+ph[ph.length-1].end)/2;if(mid>=lastT)ph.forEach(function(w){w.start=Math.min(w.start,lastT-0.2);w.end=Math.min(w.end,lastT-0.1);});if(mid<firstT)ph.forEach(function(w){w.start=Math.max(w.start,firstT);});});}
     segs.forEach(function(sg){
       sg.t0=bars[sg.start].start;sg.t1=bars[sg.end-1].end;sg.len=sg.end-sg.start;
       var r=0;for(var b=sg.start;b<sg.end;b++)r+=bars[b].rms;
       sg.db=20*Math.log10(r/sg.len+1e-6);
-      sg.words=known?words.filter(function(w){return w.start>=sg.t0-0.15&&w.start<sg.t1-0.15;}):null;
+      sg.words=known?phrases.filter(function(ph){var mid=(ph[0].start+ph[ph.length-1].end)/2;return mid>=sg.t0&&mid<sg.t1;})
+        .reduce(function(a,ph){return a.concat(ph);},[]):null;
       sg.vocal=known?sg.words.length>=3:null;
     });
     var dbs=segs.map(function(s){return s.db;}).sort(function(a,b){return a-b;});
@@ -82,6 +92,37 @@ var CBB=(function(){
       if(known&&!s.vocal)s.label=s.len>=8?'Instrumental':'Turnaround';
       else if(!known&&s.len<=2&&i>0&&i<n-1)s.label='Turnaround';
     });
+    // With lyrics, the chorus is the section whose words come back: group vocal sections by
+    // shared words and call the biggest repeating group the chorus.
+    var lyricChorus=false;
+    if(known){
+      var voc=segs.filter(function(s){return !s.label&&s.vocal;}),groups=[],best=null;
+      voc.forEach(function(a){
+        var grp=voc.filter(function(b){return b===a||jaccard(wordsText(a.words),wordsText(b.words))>=0.45;});
+        if(grp.length<2||groups.some(function(g){return g.indexOf(a)>-1;}))return;
+        grp.e=grp.reduce(function(t,x){return t+rank(x.db);},0)/grp.length;
+        groups.push(grp);
+        if(!best||grp.length>best.length||(grp.length===best.length&&grp.e>best.e))best=grp;
+      });
+      if(best){
+        // a second repeating group that always sits right next to the chorus is the rest of it
+        var mark=function(g){g.forEach(function(x){x.label='Chorus';x.lyricChorus=true;});};
+        mark(best);
+        groups.forEach(function(g){
+          if(g===best)return;
+          if(g.every(function(x){var i=segs.indexOf(x);return (segs[i-1]&&segs[i-1].lyricChorus)||(segs[i+1]&&segs[i+1].lyricChorus);}))mark(g);
+        });
+        // a neighbour made mostly of chorus words is part of the chorus too
+        var cw={};segs.forEach(function(x){if(x.lyricChorus)norm(wordsText(x.words)).split(' ').forEach(function(w){if(w)cw[w]=1;});});
+        for(var pass=0;pass<2;pass++)segs.forEach(function(x,i){
+          if(x.label||!x.vocal)return;
+          if(!((segs[i-1]&&segs[i-1].lyricChorus)||(segs[i+1]&&segs[i+1].lyricChorus)))return;
+          var ws=norm(wordsText(x.words)).split(' ').filter(Boolean),hit=ws.filter(function(w){return cw[w];}).length;
+          if(ws.length&&hit/ws.length>=0.7){x.label='Chorus';x.lyricChorus=true;}
+        });
+        lyricChorus=true;
+      }
+    }
     var stats={};
     segs.forEach(function(s,i){
       if(s.label)return;
@@ -91,7 +132,8 @@ var CBB=(function(){
     var cl=Object.keys(stats).map(function(k){var s=stats[k];s.e/=s.count;return s;});
     var chorus=null,verse=null;
     var rep=cl.filter(function(s){return s.count>=2;});
-    (rep.length?rep:cl).forEach(function(s){if(!chorus||s.e+0.15*s.count>chorus.e+0.15*chorus.count)chorus=s;});
+    if(!lyricChorus)(rep.length?rep:cl).forEach(function(s){if(!chorus||s.e+0.15*s.count>chorus.e+0.15*chorus.count)chorus=s;});
+    function isChorus(x){return x&&(x.label==='Chorus'||(chorus&&x.cluster===chorus.c));}
     cl.filter(function(s){return s!==chorus;}).sort(function(a,b){return (b.count>=2)-(a.count>=2)||a.first-b.first;}).slice(0,1).forEach(function(s){verse=s;});
     if(verse&&chorus&&verse.count<2&&verse.first>chorus.first&&segs[verse.first].t0>A.duration*0.45)verse=null;
     var bridgeUsed=false;
@@ -99,11 +141,11 @@ var CBB=(function(){
       if(s===chorus){s.label='Chorus';return;}
       if(s===verse){s.label='Verse';return;}
       var occ=segs.filter(function(x){return !x.label&&x.cluster===s.c;});
-      var pre=s.count>=2&&s.len<=8&&occ.every(function(x){var i=segs.indexOf(x),nx=segs[i+1];return nx&&chorus&&nx.cluster===chorus.c;});
+      var pre=s.count>=2&&s.len<=8&&occ.every(function(x){return isChorus(segs[segs.indexOf(x)+1]);});
       if(pre){s.label='Pre-Chorus';return;}
       var t=segs[s.first].t0;
       if(t>A.duration*0.45){
-        var after=chorus&&segs.slice(0,s.first).some(function(x){return x.cluster===chorus.c;});
+        var after=segs.slice(0,s.first).some(isChorus);
         if(s.len<=4&&s.first>=n-2)s.label='Tag';
         else if(!bridgeUsed||after){s.label=bridgeUsed?'Bridge 2':'Bridge';bridgeUsed=true;}
         else s.label='Bridge';
@@ -129,7 +171,7 @@ var CBB=(function(){
     var out=[];
     segs.forEach(function(s){
       var p=out[out.length-1];
-      if(p&&p.label===s.label&&p.cluster===s.cluster){
+      if(p&&p.label===s.label&&(p.cluster===s.cluster||(p.lyricChorus&&s.lyricChorus))){
         p.parts.push(s);p.t1=s.t1;p.len+=s.len;if(p.words)p.words=p.words.concat(s.words);return;
       }
       s.parts=[s];s.repeat=1;out.push(s);
@@ -149,7 +191,8 @@ var CBB=(function(){
         if(ok){s.unit=P;s.repeat=L/P;break;}
       }
       var end=bars[idx[s.unit-1]].end;
-      s.firstWords=s.words?s.words.filter(function(w){return w.start<end-0.15;}):null;
+      // a repeated section prints one pass, so keep the words of that pass; otherwise keep all
+      s.firstWords=!s.words?null:s.unit<L?s.words.filter(function(w){return w.start<end-0.15;}):s.words;
     });
     return out;
   }
@@ -339,6 +382,10 @@ var CBB=(function(){
 
   // ---------- lyric transcription (Whisper in the browser) ----------
   var TF_URL='https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.0.2';
+  // Whisper listens to 30 second windows. A window that is all instrumental comes back as
+  // "[Music]", so the window slides on 10 seconds and listens again; otherwise it moves on to
+  // the end of the last word it kept. (The library's own long-audio chunking drops verses that
+  // follow an instrumental intro.)
   async function transcribe(pcm16,report){
     var T=await import(TF_URL);
     var files={};
@@ -346,29 +393,40 @@ var CBB=(function(){
       if(p.status==='progress'&&p.file){
         files[p.file]=[p.loaded||0,p.total||0];
         var l=0,t=0;Object.keys(files).forEach(function(k){l+=files[k][0];t+=files[k][1];});
-        if(t)report('lyrics',0.45*l/t,'Downloading speech model '+Math.round(100*l/t)+'%');
+        if(t)report('lyrics',0.3*l/t,'Downloading speech model '+Math.round(100*l/t)+'%');
       }
     }
-    async function run(device){
-      var asr=await T.pipeline('automatic-speech-recognition','Xenova/whisper-base.en',
-        {device:device,dtype:{encoder_model:'fp32',decoder_model_merged:'q8'},progress_callback:onProg});
-      report('lyrics',0.5,'Listening for lyrics. Longer songs can take a few minutes.');
-      try{return await asr(pcm16,{chunk_length_s:30,stride_length_s:5,return_timestamps:'word'});}
-      catch(e){return await asr(pcm16,{chunk_length_s:30,stride_length_s:5,return_timestamps:true});}
+    function load(device){
+      return T.pipeline('automatic-speech-recognition','Xenova/whisper-base.en',
+        {device:device,dtype:{encoder_model:'fp32',decoder_model_merged:device==='webgpu'?'q4':'q8'},progress_callback:onProg});
     }
-    var out;
-    if(navigator.gpu){try{out=await run('webgpu');}catch(e){out=null;}}
-    if(!out)out=await run('wasm');
-    var words=[];
-    (out.chunks||[]).forEach(function(c){
-      var ts=c.timestamp||[],s=ts[0],e=ts[1]!=null?ts[1]:s+0.4,parts=(c.text||'').trim().split(/\s+/).filter(Boolean);
-      if(s==null)return;
-      parts.forEach(function(w,i){
-        var a=s+(e-s)*i/parts.length,b=s+(e-s)*(i+1)/parts.length;
-        words.push({text:w,start:a,end:b});
+    var asr=null;
+    if(navigator.gpu){try{asr=await load('webgpu');await asr(new Float32Array(16000));}catch(e){asr=null;}}
+    if(!asr)asr=await load('wasm');
+    var SR=16000,WIN=30*SR,words=[],pos=0;
+    function junk(w){return !w||/^[\[(♪*]|[\])♪]$/.test(w)||/^(music|applause|instrumental)$/i.test(w);}
+    while(pos<pcm16.length-SR){
+      report('lyrics',0.3+0.7*pos/pcm16.length,'Listening for lyrics. Longer songs can take a few minutes.');
+      var win=pcm16.slice(pos,Math.min(pcm16.length,pos+WIN)),r;
+      try{r=await asr(win,{return_timestamps:'word'});}
+      catch(e){r=await asr(win,{return_timestamps:true});}
+      var got=[];
+      (r.chunks||[]).forEach(function(c){
+        var ts=c.timestamp||[],st=ts[0],en=ts[1]!=null?ts[1]:st+0.4,parts=(c.text||'').trim().split(/\s+/).filter(Boolean);
+        if(st==null)return;
+        parts.forEach(function(w,i){got.push({text:w,start:st+(en-st)*i/parts.length,end:st+(en-st)*(i+1)/parts.length});});
       });
-    });
-    return words.filter(function(w){return !/[\[\]()♪*]/.test(w.text)&&!/^(music|applause)$/i.test(w.text);});
+      var last=pos+WIN>=pcm16.length;
+      var keep=got.filter(function(w){return !junk(w.text)&&(last||w.start<26);});
+      if(!keep.length){pos+=10*SR;continue;}
+      keep.forEach(function(w){
+        // a word after a long instrumental gets stretched back to the window start; keep it short
+        words.push({text:w.text,start:pos/SR+Math.max(w.start,w.end-1.2),end:pos/SR+w.end});
+      });
+      if(last)break;
+      pos+=Math.max(5*SR,Math.round(keep[keep.length-1].end*SR));
+    }
+    return words;
   }
 
   function abbr(name){

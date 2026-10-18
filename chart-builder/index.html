@@ -97,6 +97,7 @@
   .cb-sec .cb-textarea{min-height:110px;}
   .cb-help{font-size:12px;color:var(--text-muted);line-height:1.7;background:var(--bg);border:1px solid var(--border);padding:14px 16px;margin-top:12px;}
   .cb-help code{color:var(--gold);font-family:Menlo,Consolas,monospace;font-size:12px;}
+  .cb-made{font-size:12px;color:var(--text-mid);background:var(--surface);border:1px solid var(--border);border-left:2px solid var(--gold);padding:10px 14px;margin-bottom:10px;line-height:1.6;}
   .cb-meta-card{background:var(--surface);border:1px solid var(--border);padding:16px 16px 4px;margin-bottom:10px;}
   .cb-note{font-size:12px;color:var(--text-muted);line-height:1.6;margin-top:6px;}
   @media(max-width:900px){
@@ -169,7 +170,7 @@
           <div class="cb-field" style="flex:0 0 110px;"><label class="cb-label" for="cb-in-time">Time</label>
             <select class="cb-select" id="cb-in-time"><option value="auto">Auto</option><option>4/4</option><option>3/4</option><option>6/8</option></select></div>
         </div>
-        <label class="cb-check"><input type="checkbox" id="cb-autolyrics" checked><span>Write the lyrics automatically when none are pasted. The builder looks them up by title and artist, or listens to the vocals.</span></label>
+        <label class="cb-check"><input type="checkbox" id="cb-autolyrics" checked><span>Write the lyrics automatically from the vocals when none are pasted. A speech model listens to the song on your device (about 130MB downloads the first time).</span></label>
         <div class="cb-actions">
           <button class="cb-btn" id="cb-analyze" disabled>Analyze Song</button>
           <button class="cb-btn ghost" id="cb-blank">Start a Blank Chart</button>
@@ -214,6 +215,7 @@
 
     <div class="cb-edit-grid">
       <div>
+        <div class="cb-made" id="cb-made" style="display:none;"></div>
         <div class="cb-meta-card">
           <div class="cb-row">
             <div class="cb-field" style="flex:2;"><label class="cb-label" for="cb-title">Title</label><input class="cb-input" id="cb-title"></div>

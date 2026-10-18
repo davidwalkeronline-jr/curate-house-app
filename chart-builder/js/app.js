@@ -78,13 +78,7 @@
       report('decode',0.3,'Decoding audio');
       var buf=await CBA.decode(got.buf);
       var title=$('cb-in-title').value.trim(),artist=$('cb-in-artist').value.trim(),words=null,note='';
-      // Lyrics: pasted, then timed lyrics found online, then transcribed from the vocals.
-      if(auto&&title){
-        report('decode',1,'Looking up lyrics');
-        var found=await CBS.lyrics(title,artist,buf.duration);
-        if(found&&found.words&&found.words.length){words=found.words;note='Timed lyrics found on '+found.source;}
-        else if(found&&found.plain){lyrics=found.plain;note='Lyrics found on '+found.source;}
-      }
+      // Lyrics: pasted, otherwise transcribed from the vocals in the audio itself.
       var needLyrics=auto&&!words&&!lyrics;
       // Chords: the trained chord model runs on this device (no server involved).
       var chordSegs=null;
@@ -120,6 +114,9 @@
       if(stepState.lyrics!=='skip')report('lyrics',1,note||'No lyrics found. Paste them to add them.');
       report('chart',0.5,'Building the chart');
       chart=CBB.build(A,{lyrics:lyrics,words:words,title:title,artist:artist});
+      // shown above the editor so it is clear where the chords and lyrics came from
+      chart.made=[chordSegs?'Chords: recognized on this device':'Chords: basic detector (chord model did not load)',
+        lyrics&&!note?'Lyrics: pasted':(note||'Lyrics: none')].join('  ·  ');
       report('chart',1,'Done');
       openEditor();
     }catch(e){
@@ -160,6 +157,7 @@
     $('cb-roadmap').value=chart.roadmap||'';$('cb-notes').value=chart.notes||'';
     $('cb-tr-key').textContent=chart.key;
     $('cb-condense').checked=!!chart.condense;
+    $('cb-made').textContent=chart.made||'';$('cb-made').style.display=chart.made?'':'none';
     seg('cb-notation',chart.notation);seg('cb-columns',chart.columns);seg('cb-size',chart.size);
     renderSections();
   }

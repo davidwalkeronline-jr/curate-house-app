@@ -15,7 +15,7 @@ Everything is worked out on the user's own device, in the browser: no audio is s
 * key and chords, including sus, 7th and slash chords like 4sus2 and 1/3
 * song structure: Intro, Verse, Pre-Chorus, Chorus, Bridge, Instrumental, Turnaround, Tag, Outro, with repeats marked
 * band dynamics per section (a marking from pp to ff plus cues like Keys + pad, Drums in, Build, Break down, Full band)
-* lyrics, written automatically unless you paste them: first timed lyrics looked up on [LRCLIB](https://lrclib.net) from the title and artist, otherwise transcribed from the vocals by a speech model (Whisper base.en through [transformers.js](https://github.com/huggingface/transformers.js)) running in the browser. It downloads about 130 MB the first time and is fastest in browsers with WebGPU. If a browser cannot run it, the server's copy of the model is used instead.
+* lyrics, transcribed from the vocals in the audio unless you paste them, by a speech model running in the browser ([Whisper](https://github.com/openai/whisper) through [transformers.js](https://github.com/huggingface/transformers.js)): base.en, on the graphics chip where the browser has WebGPU and on the processor otherwise. The model downloads the first time (about 130 MB) and is then cached. If a browser cannot run it, the server's copy of the model is used instead.
 
 ## Running it
 
@@ -74,7 +74,7 @@ Keep yt-dlp up to date (`pip install -U yt-dlp`), since YouTube changes often. D
 * `js/chords.js`: the crema chord model running in the browser
 * `models/`: the chord model's weights (`crema-chord.bin`, `crema-chord.json`)
 * `js/build.js`: turns analysis and lyrics into chart sections, dynamics, and the roadmap
-* `js/sources.js`: link import, lyrics lookup, and server transcription
+* `js/sources.js`: link import and fallback server transcription
 * `js/pdf.js`: PDF layout
 * `js/app.js`: the editor
 * `server/server.js`: the server (page, links, lyrics)
