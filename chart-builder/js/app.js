@@ -25,6 +25,35 @@
       if(parts.length>1){$('cb-in-artist').value=$('cb-in-artist').value||parts[0];$('cb-in-title').value=parts.slice(1).join(' - ');}
       else $('cb-in-title').value=base;
     }
+    // the song's own tags are more reliable than the file name ("Artist - Title" or the reverse)
+    var guess={title:$('cb-in-title').value,artist:$('cb-in-artist').value};
+    f.slice(0,262144).arrayBuffer().then(function(ab){
+      var t=id3(new Uint8Array(ab));if(file!==f)return;
+      if(t.title&&$('cb-in-title').value===guess.title)$('cb-in-title').value=t.title;
+      if(t.artist&&$('cb-in-artist').value===guess.artist)$('cb-in-artist').value=t.artist;
+    }).catch(function(){});
+  }
+  // Title and artist from an MP3's ID3v2 tag (TIT2, TPE1).
+  function id3(b){
+    var out={};
+    if(b.length<10||b[0]!==73||b[1]!==68||b[2]!==51)return out;
+    var ver=b[3],size=(b[6]<<21)|(b[7]<<14)|(b[8]<<7)|b[9],p=10,end=Math.min(b.length,10+size);
+    if(ver<3)return out;
+    if(b[5]&0x40)p+=ver===4?((b[10]<<21)|(b[11]<<14)|(b[12]<<7)|b[13]):(4+((b[10]<<24)|(b[11]<<16)|(b[12]<<8)|b[13]));
+    while(p+10<=end){
+      var id=String.fromCharCode(b[p],b[p+1],b[p+2],b[p+3]);
+      if(!/^[A-Z0-9]{4}$/.test(id))break;
+      var len=ver===4?((b[p+4]<<21)|(b[p+5]<<14)|(b[p+6]<<7)|b[p+7]):((b[p+4]<<24)|(b[p+5]<<16)|(b[p+6]<<8)|b[p+7]);
+      if(len<=0||p+10+len>end)break;
+      if(id==='TIT2'||id==='TPE1'){
+        var enc=b[p+10],data=b.subarray(p+11,p+10+len),txt;
+        try{txt=new TextDecoder(enc===1?'utf-16':enc===2?'utf-16be':enc===3?'utf-8':'latin1').decode(data);}catch(e){txt='';}
+        txt=txt.replace(/\u0000.*$/,'').trim();
+        if(txt)out[id==='TIT2'?'title':'artist']=txt;
+      }
+      p+=10+len;
+    }
+    return out;
   }
   function report(step,frac,msg){
     var order=Object.keys(STEP_W),done=0,total=0;

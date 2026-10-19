@@ -44,6 +44,25 @@ var CBA=(function(){
     }
   }
 
+  // small FFT for a sharp onset signal (the 4096 point frames above are 0.37 s long and blur onsets)
+  var NS=512,COSS=new Float64Array(NS/2),SINS=new Float64Array(NS/2),REVS=new Uint32Array(NS);
+  (function(){
+    for(var i=0;i<NS/2;i++){COSS[i]=Math.cos(-2*Math.PI*i/NS);SINS[i]=Math.sin(-2*Math.PI*i/NS);}
+    var bits=Math.log2(NS);
+    for(var i=0;i<NS;i++){var r=0,x=i;for(var b=0;b<bits;b++){r=(r<<1)|(x&1);x>>=1;}REVS[i]=r;}
+  })();
+  function fftS(re,im){
+    for(var i=0;i<NS;i++){var j=REVS[i];if(i<j){var t=re[i];re[i]=re[j];re[j]=t;t=im[i];im[i]=im[j];im[j]=t;}}
+    for(var len=2;len<=NS;len<<=1){
+      var h=len>>1,step=NS/len;
+      for(var i=0;i<NS;i+=len)for(var k=0;k<h;k++){
+        var a=i+k,b=a+h,wr=COSS[k*step],wi=SINS[k*step];
+        var tr=re[b]*wr-im[b]*wi,ti=re[b]*wi+im[b]*wr;
+        re[b]=re[a]-tr;im[b]=im[a]-ti;re[a]+=tr;im[a]+=ti;
+      }
+    }
+  }
+
   // ---------- frame features ----------
   async function frameFeatures(x,progress){
     var nF=Math.max(1,Math.floor((x.length-N)/HOP)+1);
@@ -61,6 +80,8 @@ var CBA=(function(){
     var chroma=new Float32Array(nF*12),bass=new Float32Array(nF*12);
     var rms=new Float32Array(nF),flux=new Float32Array(nF),kick=new Float32Array(nF),high=new Float32Array(nF);
     var re=new Float64Array(N),im=new Float64Array(N),prev=new Float32Array(HALF),L=new Float32Array(HALF);
+    var sharp=new Float32Array(nF),winS=new Float32Array(NS),reS=new Float64Array(NS),imS=new Float64Array(NS),prevS=new Float32Array(NS/2);
+    for(var i=0;i<NS;i++)winS[i]=0.5-0.5*Math.cos(2*Math.PI*i/(NS-1));
     for(var t=0;t<nF;t++){
       var s=t*HOP,e2=0;
       for(var i=0;i<N;i++){var v=x[s+i]||0;e2+=v*v;re[i]=v*win[i];im[i]=0;}
@@ -76,10 +97,15 @@ var CBA=(function(){
         if(dv>0&&k<=fHi){fl+=dv;if(k>=kLo&&k<=kHi)kf+=dv;if(k>=hLo&&k<=hHi)hf+=dv;}
       }
       flux[t]=t?fl:0;kick[t]=t?kf:0;high[t]=t?hf:0;
+      var s0=s+HALF-NS/2,fs=0;
+      for(var i=0;i<NS;i++){reS[i]=(x[s0+i]||0)*winS[i];imS[i]=0;}
+      fftS(reS,imS);
+      for(var k=1;k<NS/2;k++){var lv2=Math.log(1+1000*Math.sqrt(reS[k]*reS[k]+imS[k]*imS[k])*4/NS),d2=lv2-prevS[k];if(d2>0&&t)fs+=d2;prevS[k]=lv2;}
+      sharp[t]=fs;
       var tmp=prev;prev=L;L=tmp;
       if(t%300===0){progress(t/nF);await tick();}
     }
-    return {nF:nF,chroma:chroma,bass:bass,rms:rms,flux:flux,kick:kick,high:high};
+    return {nF:nF,chroma:chroma,bass:bass,rms:rms,flux:flux,sharp:sharp,kick:kick,high:high};
   }
 
   // ---------- tempo + beats (autocorrelation, then Ellis-style dynamic programming) ----------
@@ -111,6 +137,14 @@ var CBA=(function(){
     while(bpm<60)bpm*=2;
     while(bpm>168)bpm/=2;
     return bpm;
+  }
+  // normalized autocorrelation of the onset envelope at a lag given in frames
+  function acAt(o,lag){
+    var n=o.length,m=0;for(var i=0;i<n;i++)m+=o[i];m/=n;
+    var v=0;for(var i=0;i<n;i++)v+=(o[i]-m)*(o[i]-m);v/=n;
+    var best=-1;
+    for(var l=Math.max(1,Math.floor(lag)-1);l<=Math.ceil(lag)+1;l++){var s=0;for(var i=0;i+l<n;i++)s+=(o[i]-m)*(o[i+l]-m);best=Math.max(best,s/(n-l)/(v||1));}
+    return best;
   }
   function trackBeats(o,bpm){
     var n=o.length,P=60*FR/bpm,sig=Math.max(1,P/32),rad=Math.ceil(sig*3);
@@ -262,6 +296,25 @@ var CBA=(function(){
     var ibis=[];for(var i=1;i<beats.length;i++)ibis.push(beats[i]-beats[i-1]);
     ibis.sort(function(a,b){return a-b;});
     if(ibis.length)bpm=60*FR/ibis[ibis.length>>1];
+    // the average beat over the whole song (a straight-line fit) is steadier than the median gap
+    if(beats.length>16){
+      var nB=beats.length,sx=0,sy=0,sxx=0,sxy=0;
+      for(var i=0;i<nB;i++){sx+=i;sy+=beats[i];sxx+=i*i;sxy+=i*beats[i];}
+      var slope=(nB*sxy-sx*sy)/(nB*sxx-sx*sx);
+      if(slope>0&&Math.abs(60*FR/slope-bpm)<0.06*bpm)bpm=60*FR/slope;
+    }
+    // the tracker can miss the first beat or two of a soft intro: extend the grid back to where the music starts
+    var P0=60*FR/bpm,firstSound=0;while(firstSound<F.nF&&F.rms[firstSound]<0.03*maxR)firstSound++;
+    while(beats.length&&beats[0]-P0>=firstSound-0.35*P0&&beats[0]-P0>=0)beats.unshift(Math.round(beats[0]-P0));
+    // A beat that splits into three (instead of two) means a compound meter: 6/8, felt as two
+    // groups of three eighth notes. Bars keep four tracked beats, and the tempo is given in quarter
+    // notes the way MultiTracks and most DAWs count 6/8.
+    var compound=false;
+    if(opts.time==='6/8')compound=true;
+    else if(!opts.time||opts.time==='auto'){
+      var os=onsetEnvelope(F.sharp),trip=(acAt(os,P0/3)+acAt(os,2*P0/3))/2,dup=acAt(os,P0/2);
+      compound=trip>dup+0.06&&trip>0.04;
+    }
     var nb=beats.length;
     var beatTimes=beats.map(function(f){return (f*HOP+N/2)/SR;});
     var beatDur=60/bpm;
@@ -304,8 +357,8 @@ var CBA=(function(){
       return best;
     }
     var m4=phaseScore(4),m3=phaseScore(3),meter;
-    if(opts.time==='3/4'||opts.time==='6/8')meter=opts.time==='3/4'?m3:phaseScore(3);
-    else if(opts.time==='4/4')meter=m4;
+    if(opts.time==='3/4')meter=m3;
+    else if(opts.time==='4/4'||compound)meter=m4;
     else meter=(m3.s>m4.s*1.35&&m3.s>0.05)?m3:m4;
     var M=meter.m,phase=meter.p;
     var beatPos=new Int32Array(nb);for(var b=0;b<nb;b++)beatPos[b]=((b-phase)%M+M)%M;
@@ -356,7 +409,7 @@ var CBA=(function(){
     var bars=[];
     var starts=[];for(var b=phase;b<nb;b+=M)starts.push(b);
     if(!starts.length)starts=[0];
-    if(starts[0]>0)starts[0]=0;
+    if(starts[0]>0){if(starts[0]>=M/2)starts.unshift(0);else starts[0]=0;}
     for(var j=0;j<starts.length;j++){
       var s=starts[j],e=j+1<starts.length?starts[j+1]:nb;
       if(e<=s)continue;
@@ -364,6 +417,12 @@ var CBA=(function(){
       for(var b=s;b<e;b++){
         if(runs.length&&runs[runs.length-1].chord===labels[b])runs[runs.length-1].len++;
         else runs.push({chord:labels[b],pos:b-s,len:1});
+      }
+      // the chord model reports changes a little late in soft passages: a short leftover of the
+      // previous bar's chord at the start of a bar belongs to the new chord
+      var prevBar=bars[bars.length-1],prevLast=prevBar&&prevBar.chords[prevBar.chords.length-1].chord;
+      if(runs.length>1&&runs[0].len<=Math.max(1,Math.round(M/4))&&runs[0].chord===prevLast&&runs[1].len>=2){
+        runs[1].len+=runs[0].len;runs[1].pos=0;runs.shift();
       }
       var keep;
       if(runs.length<=2)keep=runs;
@@ -388,7 +447,7 @@ var CBA=(function(){
     var segs=segmentStructure(bars);
     report('structure',1,segs.length+' sections');
 
-    return {duration:buf.duration,bpm:Math.round(bpm),key:keyStr,meter:M,time:opts.time&&opts.time!=='auto'?opts.time:(M===3?'3/4':'4/4'),
+    return {duration:buf.duration,bpm:Math.round(compound?bpm*0.75:bpm),key:keyStr,meter:M,time:compound?'6/8':opts.time&&opts.time!=='auto'?opts.time:(M===3?'3/4':'4/4'),
       beatDur:beatDur,bars:bars,segments:segs};
   }
 

@@ -155,6 +155,217 @@ var CBB=(function(){
     return segs;
   }
 
+  // ---------- section labeling from lyrics ----------
+  // The analysis cuts the song into phrases (usually 4 bars). With lyrics, sections are found
+  // from what repeats: the chorus is the run of phrases whose words and chords both come back,
+  // and the most of the song it covers wins. Sung material between choruses is a verse (or a
+  // bridge late in the song when its chords are new), and instrumental gaps are the intro,
+  // turnarounds, interludes and outro.
+  var VOCABLE=/^(oh+|o+h|ooh+|ah+|whoa+|woah+|yeah+|hey|la+|na+|mm+|hmm+|uh+|eh+|ho+)$/;
+  function chordRoot(c){var m=/^([A-G][#b]?)(m(?!aj))?/.exec(c||'');return m?m[1]+(m[2]||''):'N';}
+  function labelLyrics(A,words){
+    // compare like with like: long segments are cut into 4 bar phrases
+    var bars=A.bars,segs=[];
+    A.segments.forEach(function(s){
+      var L=s.end-s.start;
+      if(L>=8&&L%4===0)for(var b=s.start;b<s.end;b+=4)segs.push({start:b,end:b+4});
+      else segs.push({start:s.start,end:s.end});
+    });
+    var known=!!(words&&words.length);words=words||[];
+    assignWords(bars,segs,words);
+    // for comparing sections, each word counts where it is sung (a pickup half a beat early
+    // counts with what follows); whole lines are kept together only for display
+    var half=0.5*(A.beatDur||0.5);
+    segs.forEach(function(sg){
+      var t0=bars[sg.start].start,t1=bars[sg.end-1].end;
+      var ws=words.filter(function(w){var t=w.start+half;return t>=t0&&t<t1;}).map(function(w){return norm(w.text);}).filter(Boolean);
+      // each bar as the set of chords in it (root and minor only: G#m7 and G#m are the same here)
+      sg.tokens=[];for(var b=sg.start;b<sg.end;b++)sg.tokens.push(bars[b].chords.map(function(c){return chordRoot(c.chord);}).filter(function(t,i,all){return all.indexOf(t)===i;}));
+      // words compared by their first four letters, so "desert" and "deserve" still match
+      sg.bag={};ws.forEach(function(w){if(!VOCABLE.test(w))sg.bag[w.replace(/'/g,'').slice(0,4)]=1;});
+      sg.vocable=ws.length>=3&&ws.filter(function(w){return VOCABLE.test(w);}).length>=0.6*ws.length;
+      // sung means words in the body of the phrase, not just the tail of the line before or
+      // the pickup into the next one
+      var d=t1-t0,body=words.filter(function(w){return w.start>=t0+0.1*d&&w.start<t1-0.2*d;}).length;
+      sg.vocal=ws.length>=3&&body>=2;
+      var r=0;for(var b=sg.start;b<sg.end;b++)r+=bars[b].rms;
+      sg.db=20*Math.log10(r/(sg.end-sg.start)+1e-6);
+    });
+    // Without lyrics every phrase may be sung, except a quiet stretch at the start or end, and
+    // sections are told apart by their chords and how loud they are.
+    var dbs=segs.map(function(s){return s.db;}).sort(function(a,b){return a-b;}),med=dbs[dbs.length>>1];
+    function rank(s){return dbs.length>1?dbs.indexOf(s.db)/(dbs.length-1):0.5;}
+    if(!known){
+      segs.forEach(function(s){s.vocal=true;});
+      for(var i=0;i<segs.length-1&&segs[i].db<med-5;i++)segs[i].vocal=false;
+      for(var i=segs.length-1;i>0&&segs[i].db<med-5;i--)segs[i].vocal=false;
+      // a short phrase on one chord between sections is a turnaround
+      segs.forEach(function(s){
+        var all=[].concat.apply([],s.tokens);
+        if(s.end-s.start<=4&&all.every(function(t){return t===all[0];}))s.vocal=false;
+      });
+    }
+    function chordSim(a,b){
+      var n=Math.min(a.tokens.length,b.tokens.length),hit=0;
+      for(var i=0;i<n;i++){
+        var x=a.tokens[i],y=b.tokens[i],c=x.filter(function(t){return y.indexOf(t)>-1;}).length;
+        hit+=c/(x.length+y.length-c);
+      }
+      return hit/Math.max(a.tokens.length,b.tokens.length);
+    }
+    function lyricSim(a,b){
+      var u=0,i=0;Object.keys(a.bag).forEach(function(w){u++;if(b.bag[w])i++;});
+      Object.keys(b.bag).forEach(function(w){if(!a.bag[w])u++;});
+      return u?i/u:(a.vocable&&b.vocable?1:0);
+    }
+    function same(a,b){
+      if(a===b)return true;
+      if(!a||!b||a.vocal!==b.vocal)return false;
+      if(!a.vocal)return chordSim(a,b)>=0.75;
+      if(!known)return chordSim(a,b)>=0.6;
+      var l=lyricSim(a,b);
+      return l>=0.45||(l>=0.3&&chordSim(a,b)>=0.5);
+    }
+    var n=segs.length;
+    // every run of L phrases starting at i that comes back, with its non-overlapping occurrences
+    function occurrences(i,L,free){
+      var occ=[];
+      for(var j=0;j+L<=n;j++){
+        if(occ.length&&j<occ[occ.length-1]+L)continue;
+        var ok=true,sung=0;
+        for(var k=0;k<L&&ok;k++){
+          var a=segs[i+k],b=segs[j+k];
+          ok=(!free||!b.label)&&!b.vocable&&!a.vocable;
+          if(ok)ok=a.vocal&&b.vocal&&same(a,b),sung++;
+        }
+        if(ok&&sung)occ.push(j);
+      }
+      return occ;
+    }
+    function barsOf(i,L){return segs[i+L-1].end-segs[i].start;}
+    // A run must not start with a phrase that also turns up elsewhere followed by something
+    // else (a line that closes every verse is not the start of the chorus), nor end with one
+    // that turns up elsewhere after something else.
+    function near(a,b){return !!a&&!!b&&(known&&a.vocal&&b.vocal?lyricSim(a,b)>=0.2:chordSim(a,b)>=0.5);}
+    function clean(i,L,occ){
+      if(L<2)return true;
+      var head=occurrences(i,1,false),tail=occurrences(i+L-1,1,false);
+      var badH=head.filter(function(j){return occ.indexOf(j)<0&&!near(segs[j+1],segs[i+1]);}).length;
+      var badT=tail.filter(function(j){return occ.indexOf(j-L+1)<0&&!near(segs[j-1],segs[i+L-2]);}).length;
+      return badH<Math.max(2,occ.length/2)&&badT<Math.max(2,occ.length/2);
+    }
+    function bestRun(free,minBars){
+      var best=null;
+      for(var L=1;L<=(known?6:2);L++)for(var i=0;i+L<=n;i++){
+        if(barsOf(i,L)<minBars)continue;
+        var occ=occurrences(i,L,free);
+        if(occ.length<2||!clean(i,L,occ))continue;
+        var cover=occ.length*barsOf(i,L);
+        // without lyrics the chorus is also the loudest thing that repeats
+        if(!known){var e=0;occ.forEach(function(j){for(var k=0;k<L;k++)e+=rank(segs[j+k]);});cover*=Math.pow(e/(occ.length*L),2);}
+        if(!best||cover>best.cover||(cover===best.cover&&occ.length>best.occ.length))best={i:i,L:L,occ:occ,cover:cover};
+      }
+      return best;
+    }
+    var ch=bestRun(false,8)||bestRun(false,1);
+    function mark(run,L,name,cl){run.forEach(function(j){for(var k=0;k<L;k++){segs[j+k].label=name;segs[j+k].cluster=cl;segs[j+k].lyricChorus=/^Chorus/.test(name);}});}
+    if(ch){
+      // a chorus whose first part also comes back on its own is two choruses (Chorus 1, Chorus 2)
+      var split=null;
+      for(var p=ch.L-1;p>=1&&!split&&known;p--){
+        var occ=occurrences(ch.i,p,false);
+        if(occ.some(function(j){return ch.occ.indexOf(j)<0;}))split={p:p,occ:occ};
+      }
+      if(split){
+        mark(split.occ,split.p,'Chorus 1','C1');
+        ch.occ.forEach(function(j){for(var k=split.p;k<ch.L;k++){segs[j+k].label='Chorus 2';segs[j+k].cluster='C2';segs[j+k].lyricChorus=true;}});
+      } else mark(ch.occ,ch.L,'Chorus','C');
+    }
+    function isCh(s){return s&&/^Chorus/.test(s.label||'');}
+    // a sung phrase next to a chorus that matches one of the chorus's phrases is part of it
+    // (the last chorus is often cut short or sung a little differently)
+    for(var changed=known;changed;){
+      changed=false;
+      segs.forEach(function(s,i){
+        if(s.label||!s.vocal||s.vocable||!(isCh(segs[i-1])||isCh(segs[i+1])))return;
+        var c=segs.filter(function(x){return isCh(x)&&same(s,x);})[0];
+        if(c){s.label=c.label;s.cluster=c.cluster;s.lyricChorus=true;changed=true;}
+      });
+    }
+    // another repeating part that always comes right before a chorus is the pre-chorus
+    for(var guard=0;guard<3;guard++){
+      var r=bestRun(true,1);
+      if(!r)break;
+      var before=r.occ.every(function(j){return isCh(segs[j+r.L]);}),after=r.occ.every(function(j){return isCh(segs[j-1]);});
+      if(before)mark(r.occ,r.L,'Pre-Chorus','PC'+guard);
+      else if(after&&!segs.some(function(s){return s.label==='Chorus 2';}))mark(r.occ,r.L,'Post-Chorus','PO'+guard);
+      else break;
+    }
+    var nCh=0;segs.forEach(function(s,i){if(isCh(s)&&!isCh(segs[i-1]))nCh++;s.chBefore=nCh;});
+    var firstVocal=-1,lastVocal=-1;segs.forEach(function(s,i){if(s.vocal){if(firstVocal<0)firstVocal=i;lastVocal=i;}});
+    var verseRuns=[];
+    for(var i=0;i<n;){
+      if(segs[i].label){i++;continue;}
+      var j=i;while(j+1<n&&!segs[j+1].label&&segs[j+1].vocal===segs[i].vocal&&segs[j+1].vocable===segs[i].vocable)j++;
+      var run=segs.slice(i,j+1),bl=segs[j].end-segs[i].start,lab;
+      if(!segs[i].vocal){
+        if(firstVocal<0||i<firstVocal)lab='Intro';
+        else if(i>lastVocal)lab=bl<=2?'Ending':'Outro';
+        else if(bl<=4)lab='Turnaround';
+        else lab=run.every(function(s){return segs.some(function(c){return isCh(c)&&chordSim(s,c)>=0.75;});})?'Instrumental':'Interlude';
+      } else if(segs[i].vocable)lab='Refrain';
+      else{
+        var known=run.some(function(s){return verseRuns.some(function(v){return v.some(function(x){return chordSim(s,x)>=0.5;});});});
+        lab=segs[i].chBefore>=2&&!known&&verseRuns.length?'Bridge':'Verse';
+        if(lab==='Verse')verseRuns.push(run);
+      }
+      run.forEach(function(s){s.label=lab;s.cluster=lab+i;});
+      i=j+1;
+    }
+    // join each section's phrases into one segment
+    var out=[];
+    segs.forEach(function(s){
+      var p=out[out.length-1];
+      if(p&&p.label===s.label&&p.cluster===s.cluster&&!(isCh(s)&&p.end-p.start>=barsOf(ch.i,ch.L))){p.end=s.end;p.words=p.words.concat(s.words);return;}
+      out.push({start:s.start,end:s.end,label:s.label,cluster:s.cluster,lyricChorus:s.lyricChorus,words:s.words.slice()});
+    });
+    out.forEach(function(sg){
+      sg.t0=bars[sg.start].start;sg.t1=bars[sg.end-1].end;sg.len=sg.end-sg.start;
+      var r=0;for(var b=sg.start;b<sg.end;b++)r+=bars[b].rms;
+      sg.db=20*Math.log10(r/sg.len+1e-6);
+    });
+    return out;
+  }
+  // Sung phrases stay whole: each goes to the section holding its midpoint, so a pickup
+  // ("Never gonna | give you up") moves with the line it belongs to.
+  function assignWords(bars,segs,words){
+    var phrases=[];
+    words.forEach(function(w,i){
+      var p=phrases[phrases.length-1],prev=words[i-1];
+      if(!p||w.br||w.start-prev.end>0.6||p.length>=10||(/[.!?,;]$/.test(prev.text)&&p.length>=4))phrases.push([w]);else p.push(w);
+    });
+    var lastT=bars[bars.length-1].end,firstT=bars[0].start;
+    phrases.forEach(function(ph){var mid=(ph[0].start+ph[ph.length-1].end)/2;if(mid>=lastT)ph.forEach(function(w){w.start=Math.min(w.start,lastT-0.2);w.end=Math.min(w.end,lastT-0.1);});if(mid<firstT)ph.forEach(function(w){w.start=Math.max(w.start,firstT);});});
+    segs.forEach(function(sg){
+      var t0=bars[sg.start].start,t1=bars[sg.end-1].end;
+      sg.words=phrases.filter(function(ph){var mid=(ph[0].start+ph[ph.length-1].end)/2;return mid>=t0&&mid<t1;})
+        .reduce(function(a,ph){return a.concat(ph);},[]);
+    });
+  }
+  // Whisper sometimes gets stuck repeating a word ("oh, oh, oh..." hundreds of times) and makes
+  // up words over the fade-out. Keep runs of the same word short and drop words past the music.
+  function cleanWords(words,end){
+    var out=[],run=0;
+    (words||[]).forEach(function(w,i){
+      if(end!=null&&w.start>end+1.5)return;
+      var k=norm(w.text),p=out[out.length-1],q=words[i-1];
+      run=p&&norm(p.text)===k&&q&&w.start-q.end<0.5?run+1:1;
+      if(run>4||(run>1&&w.end-w.start<0.06))return;
+      out.push(w);
+    });
+    return out;
+  }
+
   function jaccard(a,b){
     var A={},B={},i=0,u=0;
     norm(a).split(' ').forEach(function(w){if(w)A[w]=1;});
@@ -242,17 +453,25 @@ var CBB=(function(){
     var cs=bar.chords.map(function(c){return c.chord==='N'?'N.C.':c.chord;});
     return cs.filter(function(c,i){return i===0||c!==cs[i-1];}).join(' ');
   }
+  // Chords of an instrumental stretch, written the way the reference charts do: each change
+  // once ("1 5 6m 4"), not every bar.
   function barLines(bars,per){
-    per=per||4;var out=[];
-    for(var i=0;i<bars.length;i+=per)out.push('| '+bars.slice(i,i+per).map(barCell).join(' | ')+' |');
+    per=per||8;var ch=[],out=[];
+    bars.forEach(function(b){barCell(b).split(' ').forEach(function(c){if(c&&c!==ch[ch.length-1])ch.push(c);});});
+    while(ch.length>1&&ch[0]==='N.C.')ch.shift();
+    while(ch.length>1&&ch[ch.length-1]==='N.C.')ch.pop();
+    for(var i=0;i<ch.length;i+=per)out.push('| '+ch.slice(i,i+per).join(' | ')+' |');
     return out;
   }
   function textFromWords(words,bars,beatDur){
     if(!words||!words.length)return barLines(bars).join('\n');
     var lines=[],cur=[],synced=words.some(function(w){return w.br;});
+    var bl=bars.map(function(b){return b.end-b.start;}).sort(function(a,b){return a-b;})[bars.length>>1]||2;
     words.forEach(function(w){
-      var p=cur[cur.length-1];
-      var brk=p&&(synced?w.br:(w.start-p.end>0.6||cur.length>=10||(/[.!?,;]$/.test(p.text)&&cur.length>=4)));
+      var p=cur[cur.length-1],gap=p?w.start-p.end:0;
+      // a short breath inside a line (a held note) does not end it; a longer one, or one after
+      // a line that has run a bar and a half, does
+      var brk=p&&(synced?w.br:(gap>1||(gap>0.6&&p.end-cur[0].start>=1.5*bl)||cur.length>=10||(/[.!?;]$/.test(p.text)&&cur.length>=4)));
       if(brk){lines.push(cur);cur=[];}
       cur.push({text:w.text,start:w.start,end:w.end,chord:null});
     });
@@ -277,11 +496,17 @@ var CBB=(function(){
         return;
       }
     });
-    lines.forEach(function(l){
-      if(l[0].chord)return;
-      var t=l[0].start+0.25,act=null;
+    // the first line shows the chord it starts on; later lines only show changes
+    if(!lines[0][0].chord){
+      var t=lines[0][0].start+0.25,act=null;
       ev.forEach(function(e){if(e.t<=t)act=e.chord;});
-      if(act)l[0].chord=act;
+      if(act)lines[0][0].chord=act;
+    }
+    // a change held over from the end of a line is shown once, at the start of the next line
+    lines.forEach(function(l,i){
+      var w=l[l.length-1],nx=lines[i+1];
+      if(w.after&&nx&&!nx[0].chord){nx[0].chord=w.after;w.after=null;}
+      else if(w.after&&nx&&nx[0].chord===w.after)w.after=null;
     });
     var out=[];
     lines.forEach(function(l,i){
@@ -330,7 +555,8 @@ var CBB=(function(){
     var words=opts.words||null,lyr=opts.lyrics?parseLyrics(opts.lyrics):[];
     var lyricLines={};
     lyr.forEach(function(b){lyricLines[b.type]=Math.max(lyricLines[b.type]||0,b.lines.length);});
-    var segs=merge(label(A,words),A.bars,lyricLines);
+    if(words&&words.length)words=cleanWords(words,A.bars[A.bars.length-1].end);
+    var segs=merge(labelLyrics(A,words),A.bars,lyricLines);
     dynamics(segs,A.bars);
     var vn=0;
     segs.forEach(function(s){
@@ -366,6 +592,12 @@ var CBB=(function(){
         if(cache[key]!=null)text=cache[key];
         else{
           if(s.lyric)text=textFromLines(s.lyric.lines,bars);
+          // instrumental sections show chords only; a sung "oh" refrain shows its chords and a cue
+          else if(words&&/^(Intro|Turnaround|Interlude|Instrumental|Outro|Ending)$/.test(s.label))text=barLines(bars).join('\n');
+          else if(words&&s.label==='Refrain'){
+            var voc=(s.firstWords||[]).map(function(w){return w.text.replace(/[^A-Za-z']/g,'');}).filter(Boolean);
+            text=barLines(bars).join('\n')+(voc.length?'\n('+voc[0].charAt(0).toUpperCase()+voc[0].slice(1).toLowerCase()+')':'');
+          }
           else if(words)text=textFromWords(s.firstWords,bars,A.beatDur);
           else text=barLines(bars).join('\n');
           cache[key]=text;
