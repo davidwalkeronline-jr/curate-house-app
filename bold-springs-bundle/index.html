@@ -599,20 +599,44 @@ section h2,blockquote,.bs-reveal,.bs-card{animation:bs-reveal linear both;animat
 (function () {
   var link = document.querySelector('[data-video]');
   if (!link) return;
-  link.addEventListener('click', function (e) {
-    e.preventDefault();
+  var id = link.getAttribute('data-video');
+  function captionsOff(player) {
+    try { player.unloadModule('captions'); player.unloadModule('cc'); } catch (e) {}
+  }
+  function build() {
+    var box = document.getElementById('campaign-video');
     var frame = document.createElement('iframe');
     frame.className = 'bs-video-frame';
-    frame.src = 'https://www.youtube-nocookie.com/embed/' + link.getAttribute('data-video') +
-      '?autoplay=1&controls=0&rel=0&modestbranding=1&playsinline=1&iv_load_policy=3&color=white';
+    frame.id = 'bs-video-frame';
+    frame.src = 'https://www.youtube-nocookie.com/embed/' + id +
+      '?autoplay=1&controls=0&rel=0&modestbranding=1&playsinline=1&iv_load_policy=3&color=white' +
+      '&cc_load_policy=0&enablejsapi=1&origin=' + encodeURIComponent(location.origin);
     frame.title = 'Bold Springs vision video';
     frame.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen';
     frame.allowFullscreen = true;
     frame.referrerPolicy = 'strict-origin-when-cross-origin';
-    var box = document.getElementById('campaign-video');
     box.innerHTML = '';
     box.appendChild(frame);
     frame.focus();
+    function attach() {
+      new YT.Player(frame, {
+        events: {
+          onReady: function (e) { captionsOff(e.target); },
+          onStateChange: function (e) { if (e.data === 1 || e.data === 3) captionsOff(e.target); },
+          onApiChange: function (e) { captionsOff(e.target); }
+        }
+      });
+    }
+    if (window.YT && window.YT.Player) return attach();
+    var prev = window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady = function () { if (prev) prev(); attach(); };
+    var tag = document.createElement('script');
+    tag.src = 'https://www.youtube.com/iframe_api';
+    document.head.appendChild(tag);
+  }
+  link.addEventListener('click', function (e) {
+    e.preventDefault();
+    build();
   });
 })();
 </script>
